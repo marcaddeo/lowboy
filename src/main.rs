@@ -4,7 +4,7 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 #[derive(Template)]
-#[template(path = "index.html")]
+#[template(path = "index.html.jinja")]
 struct IndexTemplate<'a> {
     name: &'a str,
 }
