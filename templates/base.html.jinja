@@ -10,6 +10,8 @@
   {% endblock %}
   </head>
   <body>
-  {% block content %}{% endblock %}
+    {% include "components/header.html.jinja" %}
+    {% block content %}{% endblock %}
+    {% include "components/footer.html.jinja" %}
   </body>
 </html>
