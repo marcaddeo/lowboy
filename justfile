@@ -18,15 +18,18 @@ alias e := edit
 _ensure_node_modules:
     test -d node_modules || npm install
 
-build-css: _ensure_node_modules
-    npx tailwindcss -i css/styles.css -o css/styles.dist.css
+build-js: _ensure_node_modules
+    npm run build:js
 
-build-server:
+build-css: _ensure_node_modules
+    npm run build:css
+
+build-rs:
     cargo build
 
 alias b := build
 # Build project
-build: build-css build-server
+build: build-js build-css build-rs
 
 alias w := build
 [doc("Watch & build project")]
@@ -35,4 +38,4 @@ watch:
     cargo watch -x run &
     server_pid="$!"
     trap "kill $server_pid; exit" SIGINT
-    npx tailwindcss -i css/styles.css -o css/styles.dist.css --watch
+    npm run watch

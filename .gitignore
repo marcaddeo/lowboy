@@ -1,3 +1,4 @@
 /target
 /node_modules
-/css/styles.dist.css
+/dist
+!/dist/.gitkeep
