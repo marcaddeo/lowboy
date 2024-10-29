@@ -1,6 +1,7 @@
 use askama_axum::Template;
 use axum::{routing::get, Router};
 use tower_http::services::ServeDir;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -14,6 +15,15 @@ async fn index() -> IndexTemplate<'static> {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("{}=debug,tower_http=debug", env!("CARGO_CRATE_NAME")).into()
+            }),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
     // build our application with a route
     let app = Router::new()
         .nest_service("/dist", ServeDir::new("dist"))
