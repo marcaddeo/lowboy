@@ -11,5 +11,5 @@ indent_size = 4
 [*.rs]
 max_line_length = 100
 
-[*.{json,ts,yml}]
+[*.{jinja,json,ts,yml}]
 indent_size = 2

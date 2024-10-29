@@ -6,11 +6,15 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 #[derive(Template)]
 #[template(path = "index.html.jinja")]
 struct IndexTemplate<'a> {
+    title: &'a str,
     name: &'a str,
 }
 
 async fn index() -> IndexTemplate<'static> {
-    IndexTemplate { name: "world" }
+    IndexTemplate {
+        title: "Default",
+        name: "World",
+    }
 }
 
 #[tokio::main]

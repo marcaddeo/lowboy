@@ -1,15 +1,8 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Hello World</title>
-    <link href="dist/main.css" rel="stylesheet">
-    <script src="dist/main.js" type="text/javascript" defer></script>
-  </head>
-  <body>
-    Hello, {{ name }}
+{% extends "base.html.jinja" %}
 
-    {% include "components/full-screen-modal.html.jinja" %}
-  </body>
-</html>
+{% block title %}Home{% endblock %}
+
+{% block content %}
+  Hello, {{ name }}
+  {% include "components/full-screen-modal.html.jinja" %}
+{% endblock %}
