@@ -4,14 +4,14 @@ use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 #[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate<'a> {
+#[template(path = "pages/home.html")]
+struct HomeTemplate<'a> {
     title: &'a str,
     name: &'a str,
 }
 
-async fn index() -> IndexTemplate<'static> {
-    IndexTemplate {
+async fn index() -> HomeTemplate<'static> {
+    HomeTemplate {
         title: "Default",
         name: "World",
     }
