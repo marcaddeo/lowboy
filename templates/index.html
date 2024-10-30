@@ -1,9 +1,9 @@
-{% extends "base.html.jinja" %}
+{% extends "base.html" %}
 
 {% block title %}Home{% endblock %}
 
 {% block content %}
-  {% include "components/hero.html.jinja" %}
+  {% include "components/hero.html" %}
   <section class="w-full bg-white pt-7 pb-7 md:pt-20 md:pb-24">
     <div class="box-border flex flex-col items-center content-center px-8 mx-auto leading-6 text-black border-0 border-gray-300 border-solid md:flex-row max-w-7xl lg:px-16">
 
@@ -65,5 +65,5 @@
     </div>
   </section>
 
-  {% include "components/faq.html.jinja" %}
+  {% include "components/faq.html" %}
 {% endblock %}
