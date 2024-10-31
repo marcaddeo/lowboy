@@ -4,14 +4,16 @@
   {% block head %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}{{ title }}{% endblock %} - Stackin</title>
+    <title>{% block title %}{% endblock %} | Stackin</title>
     <link href="dist/main.css" rel="stylesheet">
     <script src="dist/main.js" type="text/javascript" defer></script>
   {% endblock %}
   </head>
   <body>
     {% include "components/header.html" %}
-    {% block content %}{% endblock %}
+    <main>
+      {% block content %}{% endblock %}
+    </main>
     {% include "components/footer.html" %}
   </body>
 </html>
