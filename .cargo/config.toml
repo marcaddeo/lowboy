@@ -1,0 +1,2 @@
+[env]
+DATABASE_URL = "sqlite://./target/database.sqlite3"

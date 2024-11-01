@@ -11,6 +11,7 @@ axum = "0.7.7"
 fake = { version = "3.0.0", features = ["derive"] }
 sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1.41.0", features = ["full"] }
+tokio-cron-scheduler = { version = "0.13.0", features = ["english"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = ["fs"] }
 tracing = "0.1.40"

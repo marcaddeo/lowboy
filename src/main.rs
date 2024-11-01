@@ -4,6 +4,7 @@ use askama::Template;
 use axum::{extract::State, routing::get, Router};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use tower_http::services::ServeDir;
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod id;
@@ -77,6 +78,37 @@ async fn main() {
         .init();
 
     let app = App::new().await;
+
+    let scheduler = tokio_cron_scheduler::JobScheduler::new()
+        .await
+        .expect("job scheduler should be created");
+    scheduler.start().await.expect("scheduler should start");
+
+    let ctx = app.clone();
+    scheduler
+        .add(
+            tokio_cron_scheduler::Job::new_async("every 1 minute", move |_, _| {
+                let ctx = ctx.clone();
+                Box::pin(async move {
+                    let mut post = Post::fake();
+                    let user = User::insert(&post.author, &ctx.database)
+                        .await
+                        .expect("inserting user should work");
+                    post.author = user;
+                    let post = Post::insert(post, &ctx.database)
+                        .await
+                        .expect("inserting post should work");
+
+                    info!(
+                        "Added new post by: {} {}",
+                        post.author.first_name, post.author.last_name
+                    );
+                })
+            })
+            .expect("job creation should succeed"),
+        )
+        .await
+        .expect("scheduler should allow adding job");
 
     // build our application with a route
     let app = Router::new()
