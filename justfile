@@ -35,7 +35,7 @@ alias w := build
 [doc("Watch & build project")]
 watch:
     #!/usr/bin/env bash
-    cargo watch -x run &
+    cargo watch --ignore database.sqlite3 -x run &
     server_pid="$!"
     trap "kill $server_pid; exit" SIGINT
     npm run watch
