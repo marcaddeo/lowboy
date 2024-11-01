@@ -38,8 +38,8 @@
     </div>
   </section>
   <section class="grid justify-items-center">
-    {% include "components/post.html" %}
-    {% include "components/post.html" %}
-    {% include "components/post.html" %}
+    {% for post in posts %}
+      {% include "components/post.html" %}
+    {% endfor %}
   </section>
 {% endblock %}

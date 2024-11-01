@@ -7,6 +7,7 @@ edition = "2021"
 askama = { git = "https://github.com/djc/askama", features = ["with-axum"] }
 askama_axum = { git = "https://github.com/djc/askama" }
 axum = "0.7.7"
+fake = { version = "3.0.0", features = ["derive"] }
 tokio = { version = "1.41.0", features = ["full"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = ["fs"] }
