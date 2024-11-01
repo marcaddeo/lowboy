@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 use crate::{post::Post, user::User};
 use askama::Template;
-use axum::{routing::get, Router};
+use axum::{extract::State, routing::get, Router};
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
@@ -9,6 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 mod post;
 mod user;
 
+#[derive(Clone)]
 struct App {
     pub database: SqlitePool,
 }
@@ -36,7 +37,7 @@ struct HomeTemplate {
     posts: Vec<Post>,
 }
 
-async fn index() -> HomeTemplate {
+async fn index(app: State<App>) -> HomeTemplate {
     let user = User::current();
     let posts = fake::vec![Post; 3..8];
     HomeTemplate { user, posts }
@@ -53,10 +54,13 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
+    let app = App::new().await;
+
     // build our application with a route
     let app = Router::new()
         .nest_service("/dist", ServeDir::new("dist"))
-        .route("/", get(index));
+        .route("/", get(index))
+        .with_state(app);
 
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
