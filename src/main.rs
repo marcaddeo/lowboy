@@ -6,6 +6,7 @@ use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
+mod id;
 mod post;
 mod user;
 
@@ -17,7 +18,7 @@ struct App {
 impl App {
     pub async fn new() -> Self {
         let database = &format!(
-            "sqlite://{}/database.sqlite3",
+            "sqlite://{}/target/database.sqlite3",
             std::env::var("CARGO_MANIFEST_DIR").unwrap(),
         );
         let database = SqlitePoolOptions::new()
@@ -25,6 +26,25 @@ impl App {
             .connect(database)
             .await
             .unwrap();
+
+        let query = r"
+        CREATE TABLE IF NOT EXISTS user (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            first_name TEXT NOT NULL,
+            last_name TEXT NOT NULL,
+            email TEXT NOT NULL,
+            byline TEXT NOT NULL,
+            avatar TEXT NOT NULL,
+            UNIQUE(email)
+        );
+
+        CREATE TABLE IF NOT EXISTS post (
+            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+            author_id INTEGER NOT NULL,
+            content TEXT NOT NULL
+        );
+        ";
+        sqlx::query(query).execute(&database).await.unwrap();
 
         Self { database }
     }
@@ -37,8 +57,10 @@ struct HomeTemplate {
     posts: Vec<Post>,
 }
 
-async fn index(app: State<App>) -> HomeTemplate {
-    let user = User::current();
+async fn index(State(App { database }): State<App>) -> HomeTemplate {
+    let user = User::find_by_id(1, &database)
+        .await
+        .expect("uid 1 should exist");
     let posts = fake::vec![Post; 3..8];
     HomeTemplate { user, posts }
 }

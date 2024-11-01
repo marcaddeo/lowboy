@@ -1,10 +1,16 @@
+use crate::id::Id;
+use anyhow::Result;
 use fake::faker::company::en::CompanyName;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::job::en::Title;
 use fake::faker::name::en::{FirstName, LastName};
 use fake::Fake;
+use sqlx::prelude::FromRow;
+use sqlx::SqlitePool;
 
+#[derive(FromRow)]
 pub struct User {
+    pub id: Id,
     pub first_name: String,
     pub last_name: String,
     pub email: String,
@@ -31,6 +37,7 @@ impl User {
         );
 
         Self {
+            id: Id(None),
             first_name,
             last_name,
             email,
@@ -39,13 +46,11 @@ impl User {
         }
     }
 
-    pub fn current() -> Self {
-        Self {
-            first_name: "Marc".to_string(),
-            last_name: "Addeo".to_string(),
-            email: "hi@marc.cx".to_string(),
-            byline: "Super cool guy".to_string(),
-            avatar: "https://avatars.githubusercontent.com/u/199649?v=4".to_string(),
-        }
+    pub async fn find_by_id(user_id: i64, db: &SqlitePool) -> Result<User> {
+        Ok(
+            sqlx::query_as!(Self, "SELECT * FROM user WHERE id = ?", user_id)
+                .fetch_one(db)
+                .await?,
+        )
     }
 }
