@@ -1,57 +1,32 @@
 #[allow(dead_code)]
+use crate::{post::Post, user::User};
 use askama::Template;
 use axum::{routing::get, Router};
-use fake::faker::company::en::CompanyName;
-use fake::faker::internet::en::SafeEmail;
-use fake::faker::job::en::Title;
-use fake::faker::lorem::en::Paragraph;
-use fake::faker::name::en::{FirstName, LastName};
-use fake::{Dummy, Fake};
+use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use tower_http::services::ServeDir;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
-struct User {
-    first_name: String,
-    last_name: String,
-    email: String,
-    byline: String,
-    avatar: String,
+mod post;
+mod user;
+
+struct App {
+    pub database: SqlitePool,
 }
 
-impl User {
-    pub fn fake() -> Self {
-        let first_name: String = FirstName().fake();
-        let last_name: String = LastName().fake();
-
-        let email: String = SafeEmail().fake();
-
-        let byline = format!(
-            "{} - {}",
-            Title().fake::<String>(),
-            CompanyName().fake::<String>()
+impl App {
+    pub async fn new() -> Self {
+        let database = &format!(
+            "sqlite://{}/database.sqlite3",
+            std::env::var("CARGO_MANIFEST_DIR").unwrap(),
         );
+        let database = SqlitePoolOptions::new()
+            .max_connections(3)
+            .connect(database)
+            .await
+            .unwrap();
 
-        let avatar = format!(
-            "https://avatar.iran.liara.run/username?username={}+{}",
-            first_name, last_name
-        );
-
-        Self {
-            first_name,
-            last_name,
-            email,
-            byline,
-            avatar,
-        }
+        Self { database }
     }
-}
-
-#[derive(Dummy)]
-struct Post {
-    #[dummy(expr = "User::fake()")]
-    author: User,
-    #[dummy(faker = "Paragraph(4..10)")]
-    content: String,
 }
 
 #[derive(Template)]
@@ -62,13 +37,7 @@ struct HomeTemplate {
 }
 
 async fn index() -> HomeTemplate {
-    let user = User {
-        first_name: "Marc".to_string(),
-        last_name: "Addeo".to_string(),
-        email: "hi@marc.cx".to_string(),
-        byline: "Super cool guy".to_string(),
-        avatar: "https://avatars.githubusercontent.com/u/199649?v=4".to_string(),
-    };
+    let user = User::current();
     let posts = fake::vec![Post; 3..8];
     HomeTemplate { user, posts }
 }
