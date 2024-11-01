@@ -9,9 +9,9 @@
     <script src="dist/main.js" type="text/javascript" defer></script>
   {% endblock %}
   </head>
-  <body class="bg-gray-200 dark:bg-gray-800">
+  <body class="flex flex-col h-screen bg-gray-200 dark:bg-gray-800">
     {% include "components/header.html" %}
-    <main class="px-96">
+    <main class="mb-auto px-96">
       {% block content %}{% endblock %}
     </main>
     {% include "components/footer.html" %}
