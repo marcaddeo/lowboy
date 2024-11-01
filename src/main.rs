@@ -1,6 +1,7 @@
 use askama::Template;
 use axum::{routing::get, Router};
 use fake::faker::company::en::CompanyName;
+use fake::faker::internet::en::SafeEmail;
 use fake::faker::job::en::Title;
 use fake::faker::lorem::en::Paragraph;
 use fake::faker::name::en::{FirstName, LastName};
@@ -11,6 +12,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 struct User {
     first_name: String,
     last_name: String,
+    email: String,
     byline: String,
     avatar: String,
 }
@@ -19,6 +21,8 @@ impl User {
     pub fn fake() -> Self {
         let first_name: String = FirstName().fake();
         let last_name: String = LastName().fake();
+
+        let email: String = SafeEmail().fake();
 
         let byline = format!(
             "{} - {}",
@@ -34,6 +38,7 @@ impl User {
         Self {
             first_name,
             last_name,
+            email,
             byline,
             avatar,
         }
@@ -51,12 +56,20 @@ struct Post {
 #[derive(Template)]
 #[template(path = "pages/home.html")]
 struct HomeTemplate {
+    user: User,
     posts: Vec<Post>,
 }
 
 async fn index() -> HomeTemplate {
+    let user = User {
+        first_name: "Marc".to_string(),
+        last_name: "Addeo".to_string(),
+        email: "hi@marc.cx".to_string(),
+        byline: "Super cool guy".to_string(),
+        avatar: "https://avatars.githubusercontent.com/u/199649?v=4".to_string(),
+    };
     let posts = fake::vec![Post; 3..8];
-    HomeTemplate { posts }
+    HomeTemplate { user, posts }
 }
 
 #[tokio::main]

@@ -17,14 +17,14 @@
     <!-- User Pic -->
     <li x-data="{ userDropDownIsOpen: false, openWithKeyboard: false }" @keydown.esc.window="userDropDownIsOpen = false, openWithKeyboard = false" class="relative flex items-center">
       <button @click="userDropDownIsOpen = ! userDropDownIsOpen" :aria-expanded="userDropDownIsOpen" @keydown.space.prevent="openWithKeyboard = true" @keydown.enter.prevent="openWithKeyboard = true" @keydown.down.prevent="openWithKeyboard = true" class="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 dark:focus-visible:outline-sky-400" aria-controls="userMenu">
-        <img src="https://penguinui.s3.amazonaws.com/component-assets/avatar-8.webp" alt="User Profile" class="size-10 rounded-full object-cover" />
+        <img src="{{ user.avatar }}" alt="User Profile" class="size-10 rounded-full object-cover" />
       </button>
       <!-- User Dropdown -->
       <ul x-cloak x-show="userDropDownIsOpen || openWithKeyboard" x-transition.opacity x-trap="openWithKeyboard" @click.outside="userDropDownIsOpen = false, openWithKeyboard = false" @keydown.down.prevent="$focus.wrap().next()" @keydown.up.prevent="$focus.wrap().previous()" id="userMenu" class="absolute right-0 top-12 flex w-full min-w-[12rem] flex-col overflow-hidden rounded-md border border-gray-500 bg-gray-200 py-1.5 dark:border-gray-500 dark:bg-gray-800">
         <li class="border-b border-gray-500 dark:border-gray-500">
           <div class="flex flex-col px-4 py-2">
-            <span class="text-sm font-medium text-gray-950 dark:text-gray-100">Alice Brown</span>
-            <p class="text-xs text-gray-800 dark:text-gray-300">alice.brown@gmail.com</p>
+            <span class="text-sm font-medium text-gray-950 dark:text-gray-100">{{ user.first_name }} {{ user.last_name }}</span>
+            <p class="text-xs text-gray-800 dark:text-gray-300">{{ user.email }}</p>
           </div>
         </li>
         <li><a href="#" class="block bg-gray-200 px-4 py-2 text-sm text-gray-800 hover:bg-gray-800/5 hover:text-gray-950 focus-visible:bg-gray-800/10 focus-visible:text-gray-950 focus-visible:outline-none dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-200/5 dark:hover:text-gray-100 dark:focus-visible:bg-gray-200/10 dark:focus-visible:text-gray-100">Dashboard</a></li>
