@@ -1,3 +1,4 @@
+#[allow(dead_code)]
 use askama::Template;
 use axum::{routing::get, Router};
 use fake::faker::company::en::CompanyName;
