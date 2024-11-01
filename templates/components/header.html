@@ -13,7 +13,19 @@
   </div>
   <!-- Desktop Menu -->
   <ul class="hidden items-center gap-4 flex-shrink-0 sm:flex">
-    <li><a href="/" class="font-bold text-sky-900 underline-offset-2 hover:text-sky-900 focus:outline-none focus:underline dark:text-sky-400 dark:hover:text-sky-400" aria-current="page">Posts</a></li>
+    <li class="-mb-2 mr-4">
+      <div class="relative">
+        <button class="peer relative w-fit text-gray-800 dark:text-gray-300" aria-label="notifications" aria-describedby="notifications-tooltip">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"  class="size-8">
+            <path fill-rule="evenodd" d="M5.25 9a6.75 6.75 0 0113.5 0v.75c0 2.123.8 4.057 2.118 5.52a.75.75 0 01-.297 1.206c-1.544.57-3.16.99-4.831 1.243a3.75 3.75 0 11-7.48 0 24.585 24.585 0 01-4.831-1.244.75.75 0 01-.298-1.205A8.217 8.217 0 005.25 9.75V9zm4.502 8.9a2.25 2.25 0 104.496 0 25.057 25.057 0 01-4.496 0z" clip-rule="evenodd"/>
+          </svg>
+          <span class="sr-only">notifications</span>
+          <span class="absolute left-1/2 -top-1 rounded-full bg-red-500 px-1 leading-4 text-xs font-medium text-black">99+</span>
+        </button>
+        <div id="notifications-tooltip" class="absolute -bottom-9 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap rounded bg-gray-900 px-2 py-1 text-center text-sm text-gray-100 opacity-0 transition-all ease-out peer-hover:opacity-100 peer-focus:opacity-100 dark:bg-gray-50 dark:text-gray-950" role="tooltip">Click to clear notifications</div>
+
+      </div>
+    </li>
     <!-- User Pic -->
     <li x-data="{ userDropDownIsOpen: false, openWithKeyboard: false }" @keydown.esc.window="userDropDownIsOpen = false, openWithKeyboard = false" class="relative flex items-center">
       <button @click="userDropDownIsOpen = ! userDropDownIsOpen" :aria-expanded="userDropDownIsOpen" @keydown.space.prevent="openWithKeyboard = true" @keydown.enter.prevent="openWithKeyboard = true" @keydown.down.prevent="openWithKeyboard = true" class="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 dark:focus-visible:outline-sky-400" aria-controls="userMenu">
