@@ -2,59 +2,21 @@
 use crate::{post::Post, user::User};
 use app::App;
 use askama::Template;
-use axum::{
-    extract::State,
-    response::sse::{Event, Sse},
-    routing::get,
-    Router,
-};
-use axum_extra::{headers, TypedHeader};
-use futures::{Stream, StreamExt as _};
-use std::{convert::Infallible, time::Duration};
+use axum::{response::sse::Event, routing::get, Router};
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
+mod controller;
 mod id;
 mod post;
 mod user;
 
 #[derive(Template)]
-#[template(path = "pages/home.html")]
-struct HomeTemplate {
-    user: User,
-    posts: Vec<Post>,
-}
-
-#[derive(Template)]
 #[template(path = "components/post.html")]
 struct PostTemplate<'p> {
     post: &'p Post,
-}
-
-async fn index(State(App { database, .. }): State<App>) -> HomeTemplate {
-    let user = User::find_by_id(1, &database)
-        .await
-        .expect("uid 1 should exist");
-    let posts = Post::find(5, &database).await.unwrap();
-
-    HomeTemplate { user, posts }
-}
-
-async fn events(
-    State(App { sse_event_rx, .. }): State<App>,
-    TypedHeader(user_agent): TypedHeader<headers::UserAgent>,
-) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    info!("`{}` connected", user_agent.as_str());
-
-    let stream = sse_event_rx.into_stream().map(Ok);
-
-    Sse::new(stream).keep_alive(
-        axum::response::sse::KeepAlive::new()
-            .interval(Duration::from_secs(1))
-            .text("keep-alive-text"),
-    )
 }
 
 #[tokio::main]
@@ -114,8 +76,8 @@ async fn main() {
     // build our application with a route
     let app = Router::new()
         .nest_service("/dist", ServeDir::new("dist"))
-        .route("/", get(index))
-        .route("/events", get(events))
+        .route("/events", get(controller::events))
+        .route("/", get(controller::home))
         .with_state(app);
 
     // run it
