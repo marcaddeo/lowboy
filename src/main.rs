@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 use app::App;
 use axum::{routing::get, Router};
 use tower_http::services::ServeDir;

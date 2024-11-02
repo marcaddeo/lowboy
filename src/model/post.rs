@@ -8,6 +8,7 @@ use std::ops::Deref;
 
 #[derive(Debug, Dummy)]
 pub struct Post {
+    #[allow(dead_code)]
     #[dummy(expr = "Id(None)")]
     pub id: Id,
     #[dummy(expr = "User::fake()")]
@@ -74,6 +75,7 @@ impl Post {
         Ok(posts)
     }
 
+    #[allow(dead_code)]
     pub async fn find_by_id(post_id: i64, db: &SqlitePool) -> Result<Self> {
         let row = sqlx::query_as!(PostRow, "SELECT * FROM post WHERE id = ?", post_id)
             .fetch_one(db)
