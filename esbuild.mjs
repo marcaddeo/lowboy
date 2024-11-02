@@ -14,8 +14,8 @@ let cfg = {
 };
 
 if (process.env.WATCH) {
-    let ctx = await esbuild.context(cfg);
-    await ctx.watch();
+  let ctx = await esbuild.context(cfg);
+  await ctx.watch();
 } else {
-    esbuild.build(cfg);
+  esbuild.build(cfg);
 }
