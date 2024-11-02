@@ -1,6 +1,7 @@
 use app::App;
 use axum::{routing::get, Router};
 use tower_http::services::ServeDir;
+use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
@@ -34,6 +35,6 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
         .await
         .unwrap();
-    println!("listening on {}", listener.local_addr().unwrap());
+    info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 }
