@@ -1,5 +1,6 @@
 #[allow(dead_code)]
 use crate::{post::Post, user::User};
+use app::App;
 use askama::Template;
 use axum::{
     extract::State,
@@ -8,48 +9,16 @@ use axum::{
     Router,
 };
 use axum_extra::{headers, TypedHeader};
-use flume::Receiver;
-use futures::{Stream, StreamExt};
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
+use futures::{Stream, StreamExt as _};
 use std::{convert::Infallible, time::Duration};
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
+mod app;
 mod id;
 mod post;
 mod user;
-
-#[derive(Clone)]
-struct App {
-    pub database: SqlitePool,
-    pub sse_event_rx: Receiver<Event>,
-}
-
-impl App {
-    pub async fn new(sse_event_rx: Receiver<Event>) -> Self {
-        let database = &format!(
-            "sqlite://{}/target/database.sqlite3",
-            std::env::var("CARGO_MANIFEST_DIR").unwrap(),
-        );
-        let database = SqlitePoolOptions::new()
-            .max_connections(3)
-            .connect(database)
-            .await
-            .unwrap();
-
-        let schemas: Vec<(&str, &str)> = vec![User::SCHEMA, Post::SCHEMA];
-        for (table, schema) in &schemas {
-            let query = format!("CREATE TABLE IF NOT EXISTS {} ({})", table, schema);
-            sqlx::query(&query).execute(&database).await.unwrap();
-        }
-
-        Self {
-            database,
-            sse_event_rx,
-        }
-    }
-}
 
 #[derive(Template)]
 #[template(path = "pages/home.html")]
