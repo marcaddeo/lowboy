@@ -62,7 +62,8 @@ async fn index(State(App { database }): State<App>) -> HomeTemplate {
     let user = User::find_by_id(1, &database)
         .await
         .expect("uid 1 should exist");
-    let posts = fake::vec![Post; 3..8];
+    let posts = Post::find(5, &database).await.unwrap();
+
     HomeTemplate { user, posts }
 }
 

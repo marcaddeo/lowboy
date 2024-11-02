@@ -49,13 +49,33 @@ impl Post {
         })
     }
 
+    pub async fn find(limit: i64, db: &SqlitePool) -> Result<Vec<Self>> {
+        let rows = sqlx::query_as!(
+            PostRow,
+            "SELECT * FROM post ORDER BY id DESC LIMIT ?",
+            limit
+        )
+        .fetch_all(db)
+        .await?;
+
+        let mut posts = Vec::new();
+        for row in rows {
+            posts.push(Self::build_post(row, db).await?)
+        }
+
+        Ok(posts)
+    }
+
     pub async fn find_by_id(post_id: i64, db: &SqlitePool) -> Result<Self> {
         let row = sqlx::query_as!(PostRow, "SELECT * FROM post WHERE id = ?", post_id)
             .fetch_one(db)
             .await?;
 
-        let author = User::find_by_id(row.author_id, db).await?;
+        Self::build_post(row, db).await
+    }
 
+    async fn build_post(row: PostRow, db: &SqlitePool) -> Result<Post> {
+        let author = User::find_by_id(row.author_id, db).await?;
         Ok(Post {
             id: Id(Some(row.id)),
             author,
