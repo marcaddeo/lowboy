@@ -1,11 +1,11 @@
 # Stackin
 
-## Requirements
+### Requirements
 
 - [just](https://just.systems)
 - [sqlx-cli](https://crates.io/crates/sqlx-cli)
 
-## Setup
+### Setup
 
 ```console
 $ sqlx-cli database create
