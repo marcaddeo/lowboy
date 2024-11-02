@@ -2,7 +2,7 @@
 
 ## Requirements
 
-- [Just](https://just.systems)
+- [just](https://just.systems)
 - [sqlx-cli](https://crates.io/crates/sqlx-cli)
 
 ## Setup
