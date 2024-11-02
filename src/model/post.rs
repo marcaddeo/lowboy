@@ -1,5 +1,5 @@
+use super::User;
 use crate::id::Id;
-use crate::user::User;
 use anyhow::Result;
 use fake::faker::lorem::en::Paragraph;
 use fake::{Dummy, Fake, Faker};

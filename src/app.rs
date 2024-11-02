@@ -1,4 +1,4 @@
-use crate::{post::Post, user::User};
+use crate::model;
 use axum::response::sse::Event;
 use flume::Receiver;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
@@ -21,7 +21,7 @@ impl App {
             .await
             .unwrap();
 
-        let schemas: Vec<(&str, &str)> = vec![User::SCHEMA, Post::SCHEMA];
+        let schemas: Vec<(&str, &str)> = vec![model::User::SCHEMA, model::Post::SCHEMA];
         for (table, schema) in &schemas {
             let query = format!("CREATE TABLE IF NOT EXISTS {} ({})", table, schema);
             sqlx::query(&query).execute(&database).await.unwrap();

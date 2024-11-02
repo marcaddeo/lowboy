@@ -1,9 +1,9 @@
-use crate::{post::Post, user::User};
+use crate::model;
 use askama::Template;
 
 #[derive(Template)]
 #[template(path = "pages/home.html")]
 pub struct Home {
-    pub user: User,
-    pub posts: Vec<Post>,
+    pub user: model::User,
+    pub posts: Vec<model::Post>,
 }

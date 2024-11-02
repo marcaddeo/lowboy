@@ -1,5 +1,4 @@
 #[allow(dead_code)]
-use crate::{post::Post, user::User};
 use app::App;
 use askama::Template as _;
 use axum::{response::sse::Event, routing::get, Router};
@@ -10,8 +9,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 mod app;
 mod controller;
 mod id;
-mod post;
-mod user;
+mod model;
 mod view;
 
 #[tokio::main]
@@ -41,12 +39,12 @@ async fn main() {
                 let ctx = ctx.clone();
                 let tx = tx.clone();
                 Box::pin(async move {
-                    let mut post = Post::fake();
-                    let user = User::insert(&post.author, &ctx.database)
+                    let mut post = model::Post::fake();
+                    let user = model::User::insert(&post.author, &ctx.database)
                         .await
                         .expect("inserting user should work");
                     post.author = user;
-                    let post = Post::insert(post, &ctx.database)
+                    let post = model::Post::insert(post, &ctx.database)
                         .await
                         .expect("inserting post should work");
 
