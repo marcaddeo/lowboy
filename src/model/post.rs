@@ -25,15 +25,6 @@ pub struct PostRow {
 }
 
 impl Post {
-    pub const SCHEMA: (&'static str, &'static str) = (
-        "post",
-        r"
-            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-            author_id INTEGER NOT NULL,
-            content TEXT NOT NULL
-        ",
-    );
-
     pub fn fake() -> Self {
         Faker.fake()
     }

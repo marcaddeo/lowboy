@@ -24,7 +24,11 @@ async fn main() {
         .nest_service("/static", ServeDir::new("static"))
         .route("/events", get(controller::events))
         .route("/", get(controller::home))
-        .with_state(App::new().await);
+        .with_state(
+            App::new()
+                .await
+                .expect("app should initialize successfully"),
+        );
 
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

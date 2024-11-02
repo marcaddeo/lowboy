@@ -19,19 +19,6 @@ pub struct User {
 }
 
 impl User {
-    pub const SCHEMA: (&'static str, &'static str) = (
-        "user",
-        r"
-            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            byline TEXT NOT NULL,
-            avatar TEXT NOT NULL,
-            UNIQUE(email)
-        ",
-    );
-
     pub fn fake() -> Self {
         let first_name: String = FirstName().fake();
         let last_name: String = LastName().fake();

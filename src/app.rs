@@ -1,4 +1,5 @@
 use crate::{model, view};
+use anyhow::Result;
 use askama::Template as _;
 use axum::response::sse::Event;
 use flume::{Receiver, Sender};
@@ -14,22 +15,15 @@ pub struct App {
 }
 
 impl App {
-    pub async fn new() -> Self {
-        let database = &format!(
-            "sqlite://{}/target/database.sqlite3",
-            std::env::var("CARGO_MANIFEST_DIR").unwrap(),
-        );
+    pub async fn new() -> Result<Self> {
+        let database =
+            xdg::BaseDirectories::with_prefix("stackin/db")?.place_data_file("database.sqlite3")?;
+
         let database = SqlitePoolOptions::new()
             .max_connections(3)
-            .connect(database)
+            .connect(database.to_str().expect("database path should be valid"))
             .await
             .unwrap();
-
-        let schemas: Vec<(&str, &str)> = vec![model::User::SCHEMA, model::Post::SCHEMA];
-        for (table, schema) in &schemas {
-            let query = format!("CREATE TABLE IF NOT EXISTS {} ({})", table, schema);
-            sqlx::query(&query).execute(&database).await.unwrap();
-        }
 
         let (tx, rx) = flume::bounded::<Event>(32);
 
@@ -46,7 +40,7 @@ impl App {
 
         app.generate_posts().await;
 
-        app
+        Ok(app)
     }
 
     async fn generate_posts(&self) {
