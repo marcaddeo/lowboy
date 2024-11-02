@@ -10,7 +10,7 @@ let cfg = {
     "firefox57",
     "safari11",
   ],
-  outfile: "dist/main.js",
+  outfile: "static/dist/bundle.js",
 };
 
 if (process.env.WATCH) {

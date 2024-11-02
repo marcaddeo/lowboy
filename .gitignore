@@ -1,4 +1,4 @@
 /target
 /node_modules
-/dist
-!/dist/.gitkeep
+/static/dist
+!/static/dist/.gitkeep

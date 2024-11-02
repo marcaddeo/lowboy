@@ -2,7 +2,7 @@
   "scripts": {
     "build": "npm run build:js; npm run build:css",
     "build:js": "tsc --noEmit && node esbuild.mjs",
-    "build:css": "tailwindcss -i css/main.css -o dist/main.css",
+    "build:css": "tailwindcss -i css/main.css -o static/dist/bundle.css",
     "watch:js": "WATCH=1 npm run build:js",
     "watch:css": "npm run build:css -- --watch",
     "watch": "concurrently --kill-others \"npm run watch:js\" \"npm run watch:css\""

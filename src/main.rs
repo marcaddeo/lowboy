@@ -21,7 +21,7 @@ async fn main() {
 
     // build our application with a route
     let app = Router::new()
-        .nest_service("/dist", ServeDir::new("dist"))
+        .nest_service("/static", ServeDir::new("static"))
         .route("/events", get(controller::events))
         .route("/", get(controller::home))
         .with_state(App::new().await);
