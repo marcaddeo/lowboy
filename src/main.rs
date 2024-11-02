@@ -1,7 +1,7 @@
 #[allow(dead_code)]
 use crate::{post::Post, user::User};
 use app::App;
-use askama::Template;
+use askama::Template as _;
 use axum::{response::sse::Event, routing::get, Router};
 use tower_http::services::ServeDir;
 use tracing::info;
@@ -12,12 +12,7 @@ mod controller;
 mod id;
 mod post;
 mod user;
-
-#[derive(Template)]
-#[template(path = "components/post.html")]
-struct PostTemplate<'p> {
-    post: &'p Post,
-}
+mod view;
 
 #[tokio::main]
 async fn main() {
@@ -58,7 +53,7 @@ async fn main() {
                     tx.send(
                         Event::default()
                             .event("NewPost")
-                            .data(PostTemplate { post: &post }.render().unwrap()),
+                            .data(view::Post { post: &post }.render().unwrap()),
                     )
                     .unwrap();
 
