@@ -44,7 +44,7 @@ impl App {
             scheduler,
         };
 
-        app.generate_posts();
+        app.generate_posts().await;
 
         app
     }
