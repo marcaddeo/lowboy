@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Id(pub Option<i64>);
 
 impl From<i64> for Id {

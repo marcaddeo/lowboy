@@ -8,7 +8,7 @@ use fake::Fake;
 use sqlx::prelude::FromRow;
 use sqlx::SqlitePool;
 
-#[derive(Debug, FromRow)]
+#[derive(Clone, Debug, FromRow)]
 pub struct User {
     pub id: Id,
     pub first_name: String,

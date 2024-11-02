@@ -4,9 +4,9 @@
 
 {% block content %}
   <section class="grid justify-items-center py-10">
-    {% include "components/new-post.html" %}
+    {% include "components/post-form.html" %}
   </section>
-  <section hx-swap="afterbegin" hx-ext="sse" sse-connect="/events" sse-swap="NewPost" class="grid justify-items-center">
+  <section id="posts" hx-swap="afterbegin" hx-ext="sse" sse-connect="/events" sse-swap="NewPost" class="grid justify-items-center">
     {% for post in posts %}
       {% include "components/post.html" %}
     {% endfor %}

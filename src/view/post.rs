@@ -3,6 +3,6 @@ use askama::Template;
 
 #[derive(Template)]
 #[template(path = "components/post.html")]
-pub struct Post<'p> {
-    pub post: &'p model::Post,
+pub struct Post {
+    pub post: model::Post,
 }

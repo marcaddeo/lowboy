@@ -1,4 +1,5 @@
 use super::{Id, User};
+use crate::model;
 use anyhow::Result;
 use fake::faker::lorem::en::Paragraph;
 use fake::{Dummy, Fake, Faker};
@@ -6,7 +7,7 @@ use sqlx::prelude::FromRow;
 use sqlx::SqlitePool;
 use std::ops::Deref;
 
-#[derive(Debug, Dummy)]
+#[derive(Clone, Debug, Dummy)]
 pub struct Post {
     #[allow(dead_code)]
     #[dummy(expr = "Id(None)")]
@@ -25,6 +26,14 @@ pub struct PostRow {
 }
 
 impl Post {
+    pub fn new(author: model::User, content: String) -> Self {
+        Self {
+            id: Id(None),
+            author,
+            content,
+        }
+    }
+
     pub fn fake() -> Self {
         Faker.fake()
     }

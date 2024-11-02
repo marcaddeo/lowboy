@@ -1835,6 +1835,7 @@ dependencies = [
  "fake",
  "flume",
  "futures",
+ "serde",
  "sqlx",
  "tokio",
  "tokio-cron-scheduler",

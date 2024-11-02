@@ -63,7 +63,7 @@ impl App {
                         tx.send(
                             Event::default()
                                 .event("NewPost")
-                                .data(view::Post { post: &post }.render().unwrap()),
+                                .data(view::Post { post: post.clone() }.render().unwrap()),
                         )
                         .unwrap();
 

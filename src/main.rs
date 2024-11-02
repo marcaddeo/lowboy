@@ -1,5 +1,8 @@
 use app::App;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 use tower_http::services::ServeDir;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
@@ -24,6 +27,7 @@ async fn main() {
     let app = Router::new()
         .nest_service("/static", ServeDir::new("static"))
         .route("/events", get(controller::events))
+        .route("/post", post(controller::post::create))
         .route("/", get(controller::home))
         .with_state(
             App::new()
