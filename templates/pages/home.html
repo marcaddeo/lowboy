@@ -6,7 +6,7 @@
   <section class="grid justify-items-center py-10">
     {% include "components/new-post.html" %}
   </section>
-  <section class="grid justify-items-center">
+  <section hx-swap="afterbegin" hx-ext="sse" sse-connect="/events" sse-swap="NewPost" class="grid justify-items-center">
     {% for post in posts %}
       {% include "components/post.html" %}
     {% endfor %}
