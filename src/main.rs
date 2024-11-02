@@ -1,9 +1,7 @@
 #[allow(dead_code)]
 use app::App;
-use askama::Template as _;
-use axum::{response::sse::Event, routing::get, Router};
+use axum::{routing::get, Router};
 use tower_http::services::ServeDir;
-use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
@@ -23,55 +21,12 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let (tx, rx) = flume::bounded::<Event>(32);
-
-    let app = App::new(rx).await;
-
-    let scheduler = tokio_cron_scheduler::JobScheduler::new()
-        .await
-        .expect("job scheduler should be created");
-    scheduler.start().await.expect("scheduler should start");
-
-    let ctx = app.clone();
-    scheduler
-        .add(
-            tokio_cron_scheduler::Job::new_async("every 30 seconds", move |_, _| {
-                let ctx = ctx.clone();
-                let tx = tx.clone();
-                Box::pin(async move {
-                    let mut post = model::Post::fake();
-                    let user = model::User::insert(&post.author, &ctx.database)
-                        .await
-                        .expect("inserting user should work");
-                    post.author = user;
-                    let post = model::Post::insert(post, &ctx.database)
-                        .await
-                        .expect("inserting post should work");
-
-                    tx.send(
-                        Event::default()
-                            .event("NewPost")
-                            .data(view::Post { post: &post }.render().unwrap()),
-                    )
-                    .unwrap();
-
-                    info!(
-                        "Added new post by: {} {}",
-                        post.author.first_name, post.author.last_name
-                    );
-                })
-            })
-            .expect("job creation should succeed"),
-        )
-        .await
-        .expect("scheduler should allow adding job");
-
     // build our application with a route
     let app = Router::new()
         .nest_service("/dist", ServeDir::new("dist"))
         .route("/events", get(controller::events))
         .route("/", get(controller::home))
-        .with_state(app);
+        .with_state(App::new().await);
 
     // run it
     let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")

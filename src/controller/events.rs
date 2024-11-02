@@ -9,12 +9,14 @@ use std::{convert::Infallible, time::Duration};
 use tracing::info;
 
 pub async fn events(
-    State(App { sse_event_rx, .. }): State<App>,
+    State(App {
+        events: (_, rx), ..
+    }): State<App>,
     TypedHeader(user_agent): TypedHeader<headers::UserAgent>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     info!("`{}` connected", user_agent.as_str());
 
-    let stream = sse_event_rx.into_stream().map(Ok);
+    let stream = rx.into_stream().map(Ok);
 
     Sse::new(stream).keep_alive(
         axum::response::sse::KeepAlive::new()
