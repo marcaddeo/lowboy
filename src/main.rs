@@ -38,24 +38,11 @@ impl App {
             .await
             .unwrap();
 
-        let query = r"
-        CREATE TABLE IF NOT EXISTS user (
-            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-            first_name TEXT NOT NULL,
-            last_name TEXT NOT NULL,
-            email TEXT NOT NULL,
-            byline TEXT NOT NULL,
-            avatar TEXT NOT NULL,
-            UNIQUE(email)
-        );
-
-        CREATE TABLE IF NOT EXISTS post (
-            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-            author_id INTEGER NOT NULL,
-            content TEXT NOT NULL
-        );
-        ";
-        sqlx::query(query).execute(&database).await.unwrap();
+        let schemas: Vec<(&str, &str)> = vec![User::SCHEMA, Post::SCHEMA];
+        for (table, schema) in &schemas {
+            let query = format!("CREATE TABLE IF NOT EXISTS {} ({})", table, schema);
+            sqlx::query(&query).execute(&database).await.unwrap();
+        }
 
         Self {
             database,
