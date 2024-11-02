@@ -27,6 +27,8 @@ async fn scaffold_build_db() -> Result<SqlitePool> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("cargo:rerun-if-changed=migrations");
+
     scaffold_build_db().await?;
 
     Ok(())
