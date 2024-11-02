@@ -6,7 +6,6 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
 mod controller;
-mod id;
 mod model;
 mod view;
 

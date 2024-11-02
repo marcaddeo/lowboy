@@ -1,4 +1,4 @@
-use crate::id::Id;
+use super::Id;
 use anyhow::Result;
 use fake::faker::company::en::CompanyName;
 use fake::faker::internet::en::SafeEmail;
