@@ -8,7 +8,7 @@
 <br />
 
 <div align="center">
-  <a>
+  <a name="image">
     <img src="https://i.imgur.com/PjF5ZVf.png" alt="image of a lowboy trailer" />
   </a>
 </div>
