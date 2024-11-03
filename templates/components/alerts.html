@@ -1,0 +1,21 @@
+{% import "components/alert-info.html" as info %}
+{% import "components/alert-success.html" as success %}
+{% import "components/alert-warning.html" as warning %}
+{% import "components/alert-error.html" as error %}
+
+{% macro alerts(messages) %}
+  {% for message in messages %}
+    {% match message.level %}
+      {% when (axum_messages::Level::Debug) %}
+        {% call info::info(message) %}
+      {% when (axum_messages::Level::Info) %}
+        {% call info::info(message) %}
+      {% when (axum_messages::Level::Success) %}
+        {% call success::success(message) %}
+      {% when (axum_messages::Level::Warning) %}
+        {% call warning::warning(message) %}
+      {% when (axum_messages::Level::Error) %}
+        {% call error::error(message) %}
+    {% endmatch %}
+  {% endfor %}
+{% endmacro %}
