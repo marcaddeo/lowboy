@@ -1,6 +1,7 @@
 use anyhow::Result;
 use sqlx::sqlite::SqliteConnectOptions;
 use sqlx::SqlitePool;
+use vergen_gitcl::{Emitter, GitclBuilder};
 
 // This builds out a database from migrations that can be used by SQLx to verify queries at
 // compile-time.
@@ -28,6 +29,10 @@ async fn scaffold_build_db() -> Result<SqlitePool> {
 #[tokio::main]
 async fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=migrations");
+
+    Emitter::default()
+        .add_instructions(&GitclBuilder::all_git()?)?
+        .emit()?;
 
     scaffold_build_db().await?;
 

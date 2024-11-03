@@ -1,7 +1,8 @@
 [package]
-name = "stackin"
+name = "lowboy"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 anyhow = "1.0.92"
@@ -35,3 +36,4 @@ xdg = "2.5.2"
 anyhow = "1.0.92"
 sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
 tokio = { version = "1.41.0", features = ["full"] }
+vergen-gitcl = "1.0.1"

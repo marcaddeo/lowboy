@@ -6,4 +6,5 @@ use askama::Template;
 pub struct Home {
     pub user: model::User,
     pub posts: Vec<model::Post>,
+    pub version_string: String,
 }

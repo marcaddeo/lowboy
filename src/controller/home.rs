@@ -7,5 +7,10 @@ pub async fn home(State(App { database, .. }): State<App>) -> view::Home {
         .expect("uid 1 should exist");
     let posts = model::Post::find(5, &database).await.unwrap();
 
-    view::Home { user, posts }
+    let version_string = env!("VERGEN_GIT_SHA").to_string();
+    view::Home {
+        user,
+        posts,
+        version_string,
+    }
 }

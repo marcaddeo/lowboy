@@ -15,9 +15,11 @@ pub struct NextUrl {
 }
 
 pub async fn form(messages: Messages, Query(NextUrl { next }): Query<NextUrl>) -> view::Login {
+    let version_string = env!("VERGEN_GIT_SHA").to_string();
     view::Login {
         messages: messages.into_iter().collect(),
         next,
+        version_string,
     }
 }
 

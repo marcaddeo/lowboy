@@ -34,7 +34,7 @@ pub struct App {
 impl App {
     pub async fn new() -> Result<Self> {
         let database =
-            xdg::BaseDirectories::with_prefix("stackin/db")?.place_data_file("database.sqlite3")?;
+            xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
         let database = SqlitePoolOptions::new()
             .max_connections(3)

@@ -6,4 +6,5 @@ use axum_messages::Message;
 pub struct Login {
     pub messages: Vec<Message>,
     pub next: Option<String>,
+    pub version_string: String,
 }
