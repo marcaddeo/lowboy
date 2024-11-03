@@ -8,7 +8,9 @@
 <br />
 
 <div align="center">
-  <img src="http://www.rogerstrailers.com/images/series/SP55PL-Black_-_cutout.png" alt="image of a lowboy trailer" />
+  <a href="https://github.com/marcaddeo/lowboy">
+    <img src="https://i.imgur.com/PjF5ZVf.png" alt="image of a lowboy trailer" />
+  </a>
 </div>
 
 <br />
