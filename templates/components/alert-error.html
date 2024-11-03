@@ -1,0 +1,15 @@
+{% macro error(message) %}
+  <div class="relative w-full overflow-hidden rounded-md border border-red-500 bg-gray-50 text-gray-800 dark:bg-gray-900 dark:text-gray-300" role="alert">
+    <div class="flex w-full items-center gap-2 bg-red-500/10 p-4">
+      <div class="bg-red-500/15 text-red-500 rounded-full p-1" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-6" aria-hidden="true">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM8.28 7.22a.75.75 0 0 0-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 1 0 1.06 1.06L10 11.06l1.72 1.72a.75.75 0 1 0 1.06-1.06L11.06 10l1.72-1.72a.75.75 0 0 0-1.06-1.06L10 8.94 8.28 7.22Z" clip-rule="evenodd" />
+        </svg>
+      </div>
+      <div class="ml-2">
+        <h3 class="text-sm font-semibold text-red-500">Error</h3>
+        <p class="text-xs font-medium sm:text-sm">{{ message }}</p>
+      </div>
+    </div>
+  </div>
+{% endmacro %}

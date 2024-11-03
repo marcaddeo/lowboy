@@ -9,8 +9,10 @@
     <script src="static/dist/bundle.js" type="text/javascript" defer></script>
   {% endblock %}
   </head>
-  <body class="flex flex-col h-screen bg-gray-200 dark:bg-gray-800">
+  <body class="flex flex-col h-screen bg-surface dark:bg-surfaceDark">
+  {% block header %}
     {% include "components/header.html" %}
+  {% endblock %}
     <main class="mb-auto px-96">
       {% block content %}{% endblock %}
     </main>

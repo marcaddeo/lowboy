@@ -1,10 +1,4 @@
 use app::App;
-use axum::{
-    routing::{get, post},
-    Router,
-};
-use tower_http::services::ServeDir;
-use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
@@ -23,22 +17,5 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    // build our application with a route
-    let app = Router::new()
-        .nest_service("/static", ServeDir::new("static"))
-        .route("/events", get(controller::events))
-        .route("/post", post(controller::post::create))
-        .route("/", get(controller::home))
-        .with_state(
-            App::new()
-                .await
-                .expect("app should initialize successfully"),
-        );
-
-    // run it
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
-        .await
-        .unwrap();
-    info!("listening on {}", listener.local_addr().unwrap());
-    axum::serve(listener, app).await.unwrap();
+    let _ = App::new().await.expect("app should boot").serve().await;
 }

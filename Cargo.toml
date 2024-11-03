@@ -7,17 +7,26 @@ edition = "2021"
 anyhow = "1.0.92"
 askama = { git = "https://github.com/djc/askama", features = ["with-axum"] }
 askama_axum = { git = "https://github.com/djc/askama" }
+async-stream = "0.3.6"
+async-trait = "0.1.83"
 axum = "0.7.7"
 axum-extra = { version = "0.9.4", features = ["typed-header"] }
+axum-login = "0.16.0"
+axum-messages = "0.7.0"
+derive-masked = "0.1.0"
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
+password-auth = "1.0.0"
 serde = { version = "1.0.214", features = ["serde_derive"] }
 sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
+thiserror = "1.0.66"
 tokio = { version = "1.41.0", features = ["full"] }
 tokio-cron-scheduler = { version = "0.13.0", features = ["english"] }
 tower = { version = "0.5.1", features = ["util"] }
 tower-http = { version = "0.6.1", features = ["fs"] }
+tower-sessions = { version = "0.13.0", features = ["signed"] }
+tower-sessions-sqlx-store = { version = "0.14.2", features = ["sqlite"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 xdg = "2.5.2"

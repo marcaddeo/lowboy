@@ -1,5 +1,7 @@
 use super::Id;
 use anyhow::Result;
+use axum_login::AuthUser;
+use derive_masked::{DebugMasked, DisplayMasked};
 use fake::faker::company::en::CompanyName;
 use fake::faker::internet::en::SafeEmail;
 use fake::faker::job::en::Title;
@@ -8,9 +10,13 @@ use fake::Fake;
 use sqlx::prelude::FromRow;
 use sqlx::SqlitePool;
 
-#[derive(Clone, Debug, FromRow)]
+#[derive(Clone, DisplayMasked, DebugMasked, FromRow)]
 pub struct User {
     pub id: Id,
+    pub username: String,
+    #[masked]
+    pub password: String,
+
     pub first_name: String,
     pub last_name: String,
     pub email: String,
@@ -38,6 +44,8 @@ impl User {
 
         Self {
             id: Id(None),
+            username: "fake".into(), // @TODO
+            password: "fake".into(),
             first_name,
             last_name,
             email,
@@ -49,7 +57,9 @@ impl User {
     pub async fn insert(user: &Self, db: &SqlitePool) -> Result<Self> {
         Ok(sqlx::query_as!(
             Self,
-            "INSERT INTO user (first_name, last_name, email, byline, avatar) VALUES (?, ?, ?, ?, ?) RETURNING *",
+            "INSERT INTO user (username, password, first_name, last_name, email, byline, avatar) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *",
+            user.username,
+            user.password,
             user.first_name,
             user.last_name,
             user.email,
@@ -66,5 +76,25 @@ impl User {
                 .fetch_one(db)
                 .await?,
         )
+    }
+
+    pub async fn find_by_username(username: &str, db: &SqlitePool) -> Result<Self> {
+        Ok(
+            sqlx::query_as!(Self, "SELECT * FROM user WHERE username = ?", username)
+                .fetch_one(db)
+                .await?,
+        )
+    }
+}
+
+impl AuthUser for User {
+    type Id = i64;
+
+    fn id(&self) -> Self::Id {
+        self.id.expect("authenticated user should have an id")
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        self.password.as_bytes()
     }
 }

@@ -16,7 +16,7 @@ pub async fn create(State(app): State<App>, Form(input): Form<PostCreateForm>) -
     let post = model::Post::new(author, input.message);
     let post = model::Post::insert(post, &app.database).await.unwrap();
 
-    let oob = view::PostForm { swap_oob: true };
+    let oob = view::PostForm {};
     let post = view::Post { post };
 
     format!("{}{}", oob, post)
