@@ -1,7 +1,7 @@
 <h1 align="center">ℒowboy</h1>
 
 <div align="center">
- <strong>A low-js trad-style micro-whatchamacallit</strong>
+ <strong>A low-js modern trad-style micro-whatchamacallit</strong>
 </div>
 
 <br />
