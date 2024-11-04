@@ -13,7 +13,9 @@
   {% block header %}
     {% include "components/header.html" %}
   {% endblock %}
+  {% block main_tag %}
     <main class="mb-auto px-96">
+  {% endblock %}
       {% block content %}{% endblock %}
     </main>
     {% include "components/footer.html" %}

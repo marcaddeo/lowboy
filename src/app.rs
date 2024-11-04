@@ -87,6 +87,8 @@ impl App {
             .route("/", get(controller::home))
             // Previous routes require authentication.
             .route_layer(login_required!(App, login_url = "/login"))
+            // Sun guy.
+            .route("/sun-guy", get(controller::sun_guy))
             // Static assets.
             .nest_service("/static", ServeDir::new("static"))
             // Auth routes.
