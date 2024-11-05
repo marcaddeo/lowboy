@@ -29,13 +29,17 @@
     <!-- User Pic -->
     <li x-data="{ userDropDownIsOpen: false, openWithKeyboard: false }" @keydown.esc.window="userDropDownIsOpen = false, openWithKeyboard = false" class="relative flex items-center">
       <button @click="userDropDownIsOpen = ! userDropDownIsOpen" :aria-expanded="userDropDownIsOpen" @keydown.space.prevent="openWithKeyboard = true" @keydown.enter.prevent="openWithKeyboard = true" @keydown.down.prevent="openWithKeyboard = true" class="rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 dark:focus-visible:outline-sky-400" aria-controls="userMenu">
-        <img src="{{ user.avatar }}" alt="User Profile" class="size-10 rounded-full object-cover" />
+      {% if let Some(avatar) = user.avatar %}
+        <img src="{{ avatar }}" alt="User Profile" class="size-10 rounded-full object-cover" />
+      {% else %}
+        <img src="" alt="User Profile" class="size-10 rounded-full object-cover" />
+      {% endif %}
       </button>
       <!-- User Dropdown -->
       <ul x-cloak x-show="userDropDownIsOpen || openWithKeyboard" x-transition.opacity x-trap="openWithKeyboard" @click.outside="userDropDownIsOpen = false, openWithKeyboard = false" @keydown.down.prevent="$focus.wrap().next()" @keydown.up.prevent="$focus.wrap().previous()" id="userMenu" class="absolute right-0 top-12 flex w-full min-w-[12rem] flex-col overflow-hidden rounded-md border border-gray-500 bg-gray-200 py-1.5 dark:border-gray-500 dark:bg-gray-800">
         <li class="border-b border-gray-500 dark:border-gray-500">
           <div class="flex flex-col px-4 py-2">
-            <span class="text-sm font-medium text-gray-950 dark:text-gray-100">{{ user.first_name }} {{ user.last_name }}</span>
+            <span class="text-sm font-medium text-gray-950 dark:text-gray-100">{{ user.name }}</span>
             <p class="text-xs text-gray-800 dark:text-gray-300">{{ user.email }}</p>
           </div>
         </li>
@@ -58,9 +62,13 @@
   <ul x-cloak x-show="mobileMenuIsOpen" x-transition:enter="transition motion-reduce:transition-none ease-out duration-300" x-transition:enter-start="-translate-y-full" x-transition:enter-end="translate-y-0" x-transition:leave="transition motion-reduce:transition-none ease-out duration-300" x-transition:leave-start="translate-y-0" x-transition:leave-end="-translate-y-full" class="fixed max-h-svh overflow-y-auto inset-x-0 top-0 z-10 flex flex-col rounded-b-md border-b border-gray-500 bg-gray-200 px-8 pb-6 pt-10 dark:border-gray-500 dark:bg-gray-800 sm:hidden">
     <li class="mb-4 border-none">
       <div class="flex items-center gap-2 py-2">
-        <img src="https://penguinui.s3.amazonaws.com/component-assets/avatar-8.webp" alt="User Profile" class="size-12 rounded-full object-cover"  />
+      {% if let Some(avatar) = user.avatar %}
+        <img src="{{ avatar }}" alt="User Profile" class="size-12 rounded-full object-cover" />
+      {% else %}
+        <img src="" alt="User Profile" class="size-12 rounded-full object-cover" />
+      {% endif %}
         <div>
-          <span class="font-medium text-gray-950 dark:text-gray-100">{{ user.first_name }} {{ user.last_name }}</span>
+          <span class="font-medium text-gray-950 dark:text-gray-100">{{ user.name }}</span>
           <p class="text-sm text-gray-800 dark:text-gray-300">{{ user.email }}</p>
         </div>
       </div>

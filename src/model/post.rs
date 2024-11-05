@@ -34,6 +34,7 @@ impl Post {
         }
     }
 
+    #[allow(dead_code)]
     pub fn fake() -> Self {
         Faker.fake()
     }

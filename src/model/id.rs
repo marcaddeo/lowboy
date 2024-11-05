@@ -1,6 +1,6 @@
 use std::{fmt::Display, ops::Deref};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Id(pub Option<i64>);
 
 impl From<i64> for Id {

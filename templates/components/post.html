@@ -3,10 +3,16 @@
   <!-- avatar & title -->
   <div class="flex flex-col-reverse md:flex-row md:items-center mt-8 justify-between gap-6">
     <div class="flex items-center gap-2">
-      <img src="{{ post.author.avatar }}" class="size-10 rounded-full object-cover" alt="avatar"/>
+    {% if let Some(avatar) = post.author.avatar %}
+      <img src="{{ avatar }}" class="size-10 rounded-full object-cover" alt="avatar"/>
+    {% else %}
+      <img src="" class="size-10 rounded-full object-cover" alt="avatar"/>
+    {% endif %}
       <div class="flex flex-col gap-1">
-        <h3 class="font-bold leading-4 text-gray-950 dark:text-gray-100">{{ post.author.first_name }} {{ post.author.last_name }}</h3>
-        <span class="text-xs">{{ post.author.byline }}</span>
+        <h3 class="font-bold leading-4 text-gray-950 dark:text-gray-100">{{ post.author.name }}</h3>
+      {% if let Some(byline) = post.author.byline %}
+        <span class="text-xs">{{ byline }}</span>
+      {% endif %}
       </div>
     </div>
   </div>

@@ -1,3 +1,4 @@
+use crate::app::AuthSession;
 use crate::{app::App, model, view};
 use axum::extract::Form;
 use axum::extract::State;
@@ -8,10 +9,12 @@ pub struct PostCreateForm {
     message: String,
 }
 
-pub async fn create(State(app): State<App>, Form(input): Form<PostCreateForm>) -> String {
-    let author = model::User::find_by_id(1, &app.database)
-        .await
-        .expect("uid 1 should exist");
+pub async fn create(
+    auth_session: AuthSession,
+    State(app): State<App>,
+    Form(input): Form<PostCreateForm>,
+) -> String {
+    let author = auth_session.user.expect("user should be logged in");
 
     let post = model::Post::new(author, input.message);
     let post = model::Post::insert(post, &app.database).await.unwrap();
