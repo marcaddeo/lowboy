@@ -1,13 +1,12 @@
 use async_trait::async_trait;
-use deadpool_diesel::sqlite::Pool;
 use diesel::prelude::*;
 use diesel::{
-    deserialize::QueryableByName,
-    result::DatabaseErrorKind,
-    sql_query,
-    sql_types::{BigInt, Binary, Text},
-    table, RunQueryDsl, Selectable, SqliteConnection,
+    deserialize::QueryableByName, result::DatabaseErrorKind, sql_query, table, Selectable,
+    SqliteConnection,
 };
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use diesel_async::RunQueryDsl;
 use tower_sessions::{
     session::{Id, Record},
     session_store, ExpiredDeletion, SessionStore,
@@ -22,7 +21,7 @@ pub enum DieselStoreError {
 
     /// A variant to map `deadpool_diesel` pool errors.
     #[error(transparent)]
-    PoolError(#[from] deadpool_diesel::PoolError),
+    PoolError(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
 
     /// A variant to map `deadpool_diesel` interact errors.
     #[error(transparent)]
@@ -52,26 +51,26 @@ impl From<DieselStoreError> for session_store::Error {
 }
 
 table! {
-    _session {
+    tower_session (id) {
         id -> Text,
         data -> Binary,
         expiry_date -> BigInt,
     }
 }
 
-#[derive(QueryableByName, Selectable, PartialEq, Debug)]
-#[diesel(table_name = _session)]
+#[derive(QueryableByName, Queryable, Insertable, Selectable, PartialEq, Debug)]
+#[diesel(table_name = tower_session)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-struct Session {
+struct TowerSession {
     id: String,
     data: Vec<u8>,
     expiry_date: i64,
 }
 
-#[derive(derive_more::Debug)]
+#[derive(derive_more::Debug, Clone)]
 pub struct DieselSqliteSessionStore {
     #[debug(skip)]
-    database: Pool,
+    database: Pool<SyncConnectionWrapper<SqliteConnection>>,
 }
 
 impl DieselSqliteSessionStore {
@@ -87,27 +86,28 @@ impl DieselSqliteSessionStore {
     /// let session_store = SqliteStore::new(pool);
     /// # })
     /// ```
-    pub fn new(database: Pool) -> Self {
+    pub fn new(database: Pool<SyncConnectionWrapper<SqliteConnection>>) -> Self {
         Self { database }
     }
 
     /// Migrate the session schema.
-    pub async fn migrate(&self) -> sqlx::Result<()> {
+    pub async fn migrate(&self) -> session_store::Result<()> {
         let query = r#"
-            create table if not exists _session
+            create table if not exists tower_session
             (
                 id text primary key not null,
                 data blob not null,
                 expiry_date integer not null
             )
             "#;
-        let _ = self
+
+        let mut conn = self
             .database
             .get()
             .await
-            .unwrap()
-            .interact(|conn| sql_query(query.to_string()).execute(conn))
-            .await;
+            .map_err(DieselStoreError::PoolError)?;
+        sql_query(query.to_string()).execute(&mut conn);
+
         Ok(())
     }
 }
@@ -115,22 +115,16 @@ impl DieselSqliteSessionStore {
 #[async_trait]
 impl ExpiredDeletion for DieselSqliteSessionStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
-        let query = r#"
-            delete from _session
-            where datetime(expiry_date) < datetime('now')
-            "#;
-        self.database
+        let mut conn = self
+            .database
             .get()
             .await
-            .map_err(DieselStoreError::PoolError)?
-            .interact(|conn| {
-                sql_query(query.to_string())
-                    .execute(conn)
-                    .map_err(DieselStoreError::Diesel)
-            })
+            .map_err(DieselStoreError::PoolError)?;
+        diesel::delete(tower_session::table)
+            .filter(tower_session::expiry_date.lt(chrono::Utc::now().timestamp()))
+            .execute(&mut conn)
             .await
-            .map_err(DieselStoreError::InteractError)??;
-
+            .map_err(DieselStoreError::Diesel)?;
         Ok(())
     }
 }
@@ -138,20 +132,19 @@ impl ExpiredDeletion for DieselSqliteSessionStore {
 #[async_trait]
 impl SessionStore for DieselSqliteSessionStore {
     async fn create(&self, record: &mut Record) -> session_store::Result<()> {
-        fn try_create_with_conn(
-            conn: &mut SqliteConnection,
+        async fn try_create_with_conn(
+            conn: &mut SyncConnectionWrapper<SqliteConnection>,
             record: &Record,
         ) -> session_store::Result<bool> {
-            let query = r#"
-                insert or abort into _session
-                (id, data, expiry_date) values (?, ?, ?)
-                "#;
-
-            let res = sql_query(query)
-                .bind::<Text, _>(record.id.to_string())
-                .bind::<Binary, _>(rmp_serde::to_vec(&record).unwrap())
-                .bind::<BigInt, _>(record.expiry_date.unix_timestamp())
-                .execute(conn);
+            let new_session = TowerSession {
+                id: record.id.to_string(),
+                data: rmp_serde::to_vec(&record).unwrap(),
+                expiry_date: record.expiry_date.unix_timestamp(),
+            };
+            let res = diesel::insert_into(tower_session::table)
+                .values(&new_session)
+                .execute(conn)
+                .await;
 
             match res {
                 Ok(_) => Ok(true),
@@ -167,94 +160,64 @@ impl SessionStore for DieselSqliteSessionStore {
             }
         }
 
-        let conn = self
+        let mut conn = self
             .database
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        let rec = record.clone();
-        let new_record = conn
-            .interact(|conn| {
-                let rec = rec;
-                conn.transaction::<_, diesel::result::Error, _>(|conn| {
-                    let mut rec = rec.clone();
-                    while !try_create_with_conn(conn, &rec).unwrap() {
-                        rec.id = Id::default(); // Generate a new ID
-                    }
-                    Ok(rec)
-                })
-            })
-            .await
-            .map_err(DieselStoreError::InteractError)?
-            .map_err(DieselStoreError::Diesel)?;
-
-        record.id = new_record.id;
+        while !try_create_with_conn(&mut conn, &record).await.unwrap() {
+            record.id = Id::default(); // Generate a new ID
+        }
 
         Ok(())
     }
 
     async fn save(&self, record: &Record) -> session_store::Result<()> {
-        fn save_with_conn(
-            conn: &mut SqliteConnection,
+        async fn save_with_conn(
+            conn: &mut SyncConnectionWrapper<SqliteConnection>,
             record: &Record,
         ) -> session_store::Result<()> {
-            let query = r#"
-                insert into _session
-                (id, data, expiry_date) values (?, ?, ?)
-                on conflict(id) do update set
-                data = excluded.data,
-                expiry_date = excluded.expiry_date
-                "#;
-            sql_query(query)
-                .bind::<Text, _>(record.id.to_string())
-                .bind::<Binary, _>(rmp_serde::to_vec(&record).unwrap())
-                .bind::<BigInt, _>(record.expiry_date.unix_timestamp())
+            let new_session = TowerSession {
+                id: record.id.to_string(),
+                data: rmp_serde::to_vec(&record).unwrap(),
+                expiry_date: record.expiry_date.unix_timestamp(),
+            };
+            diesel::insert_into(tower_session::table)
+                .values(&new_session)
+                .on_conflict(tower_session::id)
+                .do_update()
+                .set(tower_session::expiry_date.eq(new_session.expiry_date))
                 .execute(conn)
-                .map_err(DieselStoreError::Diesel)?;
+                .await;
 
             Ok(())
         }
-        let conn = self
+        let mut conn = self
             .database
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        let rec = record.clone();
-        conn.interact(|conn| {
-            let rec = rec;
-            save_with_conn(conn, &rec)
-        })
-        .await
-        .map_err(DieselStoreError::InteractError)?
+        save_with_conn(&mut conn, &record).await?;
+
+        Ok(())
     }
 
     async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
-        let conn = self
+        let mut conn = self
             .database
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        let session_id = session_id.to_string();
-        let session = conn
-            .interact(|conn| {
-                let query = r#"
-                select * from _session
-                where id = ? and expiry_date > ?
-                LIMIT 1
-                "#;
-                sql_query(query)
-                    .bind::<Text, _>(session_id)
-                    .bind::<BigInt, _>(chrono::Utc::now().timestamp())
-                    .load::<Session>(conn)
-            })
-            .await
-            .map_err(DieselStoreError::InteractError)?
-            .map_err(DieselStoreError::Diesel)?;
+        let session = tower_session::dsl::tower_session
+            .filter(tower_session::id.eq(session_id.to_string()))
+            .filter(tower_session::expiry_date.gt(chrono::Utc::now().timestamp()))
+            .get_result::<TowerSession>(&mut conn)
+            .await;
 
-        if let Some(session) = session.first() {
+        if let Ok(session) = session {
             Ok(Some(
                 rmp_serde::from_slice(&session.data).map_err(DieselStoreError::Decode)?,
             ))
@@ -264,30 +227,18 @@ impl SessionStore for DieselSqliteSessionStore {
     }
 
     async fn delete(&self, session_id: &Id) -> session_store::Result<()> {
-        let conn = self
+        let mut conn = self
             .database
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        let session_id = session_id.to_string();
-        conn.interact(|conn| {
-            let query = r#"
-                    delete from _session where id = ?
-                    "#;
-            sql_query(query).bind::<Text, _>(session_id).execute(conn)
-        })
-        .await
-        .map_err(DieselStoreError::InteractError)?
-        .map_err(DieselStoreError::Diesel)?;
+        diesel::delete(tower_session::table)
+            .filter(tower_session::id.eq(session_id.to_string()))
+            .execute(&mut conn)
+            .await
+            .map_err(DieselStoreError::Diesel)?;
 
         Ok(())
     }
-}
-
-fn is_valid_table_name(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
