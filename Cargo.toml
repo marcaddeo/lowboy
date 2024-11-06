@@ -15,6 +15,7 @@ axum-extra = { version = "0.9.4", features = ["typed-header"] }
 axum-login = "0.16.0"
 axum-messages = "0.7.0"
 derive-masked = "0.1.0"
+derive_builder = "0.20.2"
 derive_more = { version = "1.0.0", features = ["display"] }
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"

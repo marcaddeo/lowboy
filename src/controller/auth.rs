@@ -70,19 +70,15 @@ pub async fn login(
                 }
             };
 
-            let username = user
-                .username
-                .as_ref()
-                .expect("username should exist on password login");
             match auth_session.login(&user).await {
                 Ok(_) => (),
                 Err(e) => {
-                    warn!("Error logging in user({}): {}", username, e);
+                    warn!("Error logging in user({}): {}", user.username, e);
                     return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
                 }
             }
 
-            messages.success(format!("Successfully logged in as {}", username));
+            messages.success(format!("Successfully logged in as {}", user.username));
 
             if let Some(ref next) = input.next {
                 Redirect::to(next)

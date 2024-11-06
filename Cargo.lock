@@ -1403,6 +1403,7 @@ dependencies = [
  "axum-login",
  "axum-messages",
  "derive-masked",
+ "derive_builder",
  "derive_more",
  "fake",
  "flume",

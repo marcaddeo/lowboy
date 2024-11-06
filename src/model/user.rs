@@ -1,3 +1,4 @@
+use super::user_data::UserData;
 use super::Id;
 use crate::app::GitHubUserInfo;
 use anyhow::Result;
@@ -13,19 +14,16 @@ use sqlx::prelude::FromRow;
 use sqlx::SqlitePool;
 
 #[derive(Clone, Display, DebugMasked, Default, FromRow)]
-#[display("{id} {email} {name} {username:?} {password:?} {access_token:?} {byline:?} {avatar:?}")]
+#[display("{id} {username} {email} {password:?} {access_token:?}")]
 pub struct User {
     pub id: Id,
+    pub username: String,
     pub email: String,
-    pub name: String,
-    pub username: Option<String>,
     #[masked]
     pub password: Option<String>,
     #[masked]
     pub access_token: Option<String>,
-
-    pub byline: Option<String>,
-    pub avatar: Option<String>,
+    pub data: UserData,
 }
 
 impl User {
@@ -36,77 +34,104 @@ impl User {
 
         let email: String = SafeEmail().fake();
 
-        let byline = Some(format!(
+        let byline = format!(
             "{} - {}",
             Title().fake::<String>(),
             CompanyName().fake::<String>()
-        ));
+        );
 
-        let avatar = Some(format!(
+        let avatar = format!(
             "https://avatar.iran.liara.run/username?username={}+{}",
             first_name, last_name
-        ));
+        );
+
+        let data = UserData::builder(name)
+            .byline(byline)
+            .avatar(avatar)
+            .build();
 
         Self {
             id: Id(None),
+            username: "fake".into(),
             email,
-            username: None,
             password: None,
             access_token: None,
-            name,
-            byline,
-            avatar,
+            data,
         }
     }
 
     pub async fn insert(user: &Self, db: &SqlitePool) -> Result<Self> {
-        dbg!(&user);
-        Ok(sqlx::query_as!(
-            Self,
+        let record = sqlx::query!(
             r"
-            INSERT INTO user (email, username, password, access_token, name, byline, avatar)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO user (username, email, password, access_token)
+            VALUES (?, ?, ?, ?)
             ON CONFLICT(email) DO UPDATE
             SET access_token = excluded.access_token
             RETURNING *
             ",
-            user.email,
             user.username,
+            user.email,
             user.password,
             user.access_token,
-            user.name,
-            user.byline,
-            user.avatar
         )
         .fetch_one(db)
-        .await?)
+        .await?;
+        let mut user_data = user.data.clone();
+        user_data.user_id = Id(Some(record.id));
+        let data = UserData::insert(&user_data, db).await?;
+
+        Ok(User {
+            id: Id(Some(record.id)),
+            username: record.username,
+            email: record.email,
+            password: record.password,
+            access_token: record.access_token,
+            data,
+        })
     }
 
     pub async fn find_by_id(user_id: i64, db: &SqlitePool) -> Result<Self> {
-        Ok(
-            sqlx::query_as!(Self, "SELECT * FROM user WHERE id = ?", user_id)
-                .fetch_one(db)
-                .await?,
-        )
+        let record = sqlx::query!(r#"SELECT * FROM user WHERE user.id = ?"#, user_id)
+            .fetch_one(db)
+            .await?;
+        let data = UserData::find_by_user_id(user_id, db).await?;
+
+        Ok(User {
+            id: Id(Some(record.id)),
+            username: record.username,
+            email: record.email,
+            password: record.password,
+            access_token: record.access_token,
+            data,
+        })
     }
 
-    #[allow(dead_code)]
-    pub async fn find_by_username(username: &str, db: &SqlitePool) -> Result<Self> {
-        Ok(
-            sqlx::query_as!(Self, "SELECT * FROM user WHERE username = ?", username)
-                .fetch_one(db)
-                .await?,
-        )
-    }
+    // #[allow(dead_code)]
+    // pub async fn find_by_username(username: &str, db: &SqlitePool) -> Result<Self> {
+    //     Ok(
+    //         sqlx::query_as!(Self, "SELECT * FROM user WHERE username = ?", username)
+    //             .fetch_one(db)
+    //             .await?,
+    //     )
+    // }
 
     pub async fn find_by_username_with_password(username: &str, db: &SqlitePool) -> Result<Self> {
-        Ok(sqlx::query_as!(
-            Self,
-            "SELECT * FROM user WHERE username = ? and password IS NOT NULL",
+        let record = sqlx::query!(
+            r#"SELECT * FROM user WHERE username = ? AND password IS NOT NULL"#,
             username
         )
         .fetch_one(db)
-        .await?)
+        .await?;
+        let data = UserData::find_by_user_id(record.id, db).await?;
+
+        Ok(User {
+            id: Id(Some(record.id)),
+            username: record.username,
+            email: record.email,
+            password: record.password,
+            access_token: record.access_token,
+            data,
+        })
     }
 }
 
@@ -133,11 +158,11 @@ impl AuthUser for User {
 impl From<GitHubUserInfo> for User {
     fn from(value: GitHubUserInfo) -> Self {
         Self {
-            id: Id(None),
+            username: value.login,
             email: value.email,
-            name: value.name,
-            username: Some(value.login),
-            avatar: Some(value.avatar_url),
+            data: UserData::builder(value.name)
+                .avatar(value.avatar_url)
+                .build(),
             ..Default::default()
         }
     }

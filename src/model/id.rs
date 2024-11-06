@@ -1,6 +1,9 @@
 use std::{fmt::Display, ops::Deref};
 
-#[derive(Clone, Debug, Default)]
+use sqlx::prelude::{FromRow, Type};
+
+#[derive(Clone, Debug, Default, FromRow, Type)]
+#[sqlx(transparent)]
 pub struct Id(pub Option<i64>);
 
 impl From<i64> for Id {

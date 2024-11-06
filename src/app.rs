@@ -180,7 +180,7 @@ impl App {
                         )
                         .unwrap();
 
-                        info!("Added new post by: {}", post.author.name);
+                        info!("Added new post by: {}", post.author.data.name);
                     })
                 })
                 .expect("job creation should succeed"),
