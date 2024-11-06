@@ -15,11 +15,13 @@ axum-extra = { version = "0.9.4", features = ["typed-header"] }
 axum-login = "0.16.0"
 axum-messages = "0.7.0"
 chrono = "0.4.38"
+deadpool = "0.12.1"
 deadpool-diesel = { version = "0.6.1", features = ["sqlite", "serde", "tracing"] }
 derive-masked = "0.1.0"
 derive_builder = "0.20.2"
 derive_more = { version = "1.0.0", features = ["debug", "display"] }
 diesel = { version = "2.2.4", features = ["sqlite", "returning_clauses_for_sqlite_3_35", "chrono"] }
+diesel-async = { version = "0.5.1", features = ["deadpool", "pool", "sqlite"] }
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"

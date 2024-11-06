@@ -709,6 +709,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-async"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c5c6ec8d5c7b8444d19a47161797cbe361e0fb1ee40c6a8124ec915b64a4125"
+dependencies = [
+ "async-trait",
+ "deadpool",
+ "diesel",
+ "futures-util",
+ "scoped-futures",
+ "tokio",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1504,11 +1518,13 @@ dependencies = [
  "axum-login",
  "axum-messages",
  "chrono",
+ "deadpool",
  "deadpool-diesel",
  "derive-masked",
  "derive_builder",
  "derive_more",
  "diesel",
+ "diesel-async",
  "diesel_migrations",
  "fake",
  "flume",
@@ -2318,6 +2334,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01227be5826fa0690321a2ba6c5cd57a19cf3f6a09e76973b58e61de6ab9d1c1"
 dependencies = [
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "scoped-futures"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b24aae2d0636530f359e9d5ef0c04669d11c5e756699b27a6a6d845d8329091"
+dependencies = [
+ "pin-project-lite",
 ]
 
 [[package]]
