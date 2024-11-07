@@ -4,7 +4,7 @@ use askama::Template;
 #[derive(Template)]
 #[template(path = "pages/home.html")]
 pub struct Home {
-    pub user: model::User,
-    pub posts: Vec<model::Post>,
+    pub user: model::UserWithData,
+    pub posts: Vec<model::PostWithAuthor>,
     pub version_string: String,
 }

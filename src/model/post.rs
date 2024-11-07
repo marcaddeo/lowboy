@@ -1,96 +1,86 @@
-use super::{Id, User};
-use crate::model;
-use anyhow::Result;
-use fake::faker::lorem::en::Paragraph;
-use fake::{Dummy, Fake, Faker};
-use sqlx::prelude::FromRow;
-use sqlx::SqlitePool;
-use std::ops::Deref;
+use super::User;
+use super::UserWithData;
+use crate::app::Connection;
+use crate::schema::post;
+use diesel::insert_into;
+use diesel::prelude::*;
+use diesel_async::RunQueryDsl;
+use serde::Serialize;
 
-#[derive(Clone, Debug, Dummy)]
+#[derive(
+    Clone, Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations, Serialize,
+)]
+#[diesel(table_name = crate::schema::post)]
+#[diesel(belongs_to(User))]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Post {
-    #[allow(dead_code)]
-    #[dummy(expr = "Id(None)")]
-    pub id: Id,
-    #[dummy(expr = "User::fake()")]
-    pub author: User,
-    #[dummy(faker = "Paragraph(4..10)")]
+    pub id: i32,
+    pub user_id: i32,
     pub content: String,
 }
 
-#[derive(FromRow)]
-pub struct PostRow {
-    pub id: i64,
-    pub user_id: i64,
-    pub content: String,
+#[derive(Serialize)]
+pub struct PostWithAuthor {
+    #[serde(flatten)]
+    pub post: Post,
+    pub author: UserWithData,
+}
+
+impl PostWithAuthor {
+    pub async fn from_post(post: Post, conn: &mut Connection) -> QueryResult<Self> {
+        let user = post.user(conn).await?;
+        let author = UserWithData::from_user(user, conn).await?;
+        Ok(Self { post, author })
+    }
+
+    pub async fn from_posts(posts: Vec<Post>, conn: &mut Connection) -> QueryResult<Vec<Self>> {
+        let mut posts_with_author: Vec<PostWithAuthor> = Vec::new();
+
+        for post in posts {
+            let post_with_author = PostWithAuthor::from_post(post, conn).await?;
+            posts_with_author.push(post_with_author);
+        }
+
+        Ok(posts_with_author)
+    }
 }
 
 impl Post {
-    pub fn new(author: model::User, content: String) -> Self {
-        Self {
-            id: Id(None),
-            author,
-            content,
-        }
+    pub async fn find(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        post::table.find(id).first(conn).await
     }
 
-    #[allow(dead_code)]
-    pub fn fake() -> Self {
-        Faker.fake()
+    pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
+        let posts = post::table
+            .select(Post::as_select())
+            .limit(limit.unwrap_or(100));
+
+        posts.load(conn).await
     }
 
-    pub async fn insert(post: Self, db: &SqlitePool) -> Result<Self> {
-        let author_id = post
-            .author
-            .id
-            .deref()
-            .expect("post should have an associated author with an id");
-        let row = sqlx::query!(
-            "INSERT INTO post (user_id, content) VALUES (?, ?) RETURNING *",
-            author_id,
-            post.content
-        )
-        .fetch_one(db)
-        .await?;
+    pub async fn user(&self, conn: &mut Connection) -> QueryResult<User> {
+        User::find(self.user_id, conn).await
+    }
+}
 
-        Ok(Post {
-            id: Id(Some(row.id)),
-            ..post
-        })
+#[derive(Clone, Default, Insertable)]
+#[diesel(table_name = crate::schema::post)]
+#[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+pub struct NewPost<'a> {
+    pub user_id: i32,
+    pub content: &'a str,
+}
+
+impl<'a> NewPost<'a> {
+    pub fn new(user_id: i32, content: &'a str) -> Self {
+        NewPost { user_id, content }
     }
 
-    pub async fn find(limit: i64, db: &SqlitePool) -> Result<Vec<Self>> {
-        let rows = sqlx::query_as!(
-            PostRow,
-            "SELECT * FROM post ORDER BY id DESC LIMIT ?",
-            limit
-        )
-        .fetch_all(db)
-        .await?;
-
-        let mut posts = Vec::new();
-        for row in rows {
-            posts.push(Self::build_post(row, db).await?)
-        }
-
-        Ok(posts)
-    }
-
-    #[allow(dead_code)]
-    pub async fn find_by_id(post_id: i64, db: &SqlitePool) -> Result<Self> {
-        let row = sqlx::query_as!(PostRow, "SELECT * FROM post WHERE id = ?", post_id)
-            .fetch_one(db)
-            .await?;
-
-        Self::build_post(row, db).await
-    }
-
-    async fn build_post(row: PostRow, db: &SqlitePool) -> Result<Post> {
-        let author = User::find_by_id(row.user_id, db).await?;
-        Ok(Post {
-            id: Id(Some(row.id)),
-            author,
-            content: row.content,
-        })
+    pub async fn create(&self, conn: &mut Connection) -> QueryResult<Post> {
+        insert_into(post::table)
+            .values(self)
+            .returning(post::table::all_columns())
+            .get_result(conn)
+            .await
     }
 }

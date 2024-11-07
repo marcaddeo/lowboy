@@ -1,7 +1,7 @@
-use crate::app::AuthSession;
-use crate::{app::App, model, view};
+use crate::app::{AuthSession, DatabaseConnection};
+use crate::model::{NewPost, PostWithAuthor};
+use crate::view;
 use axum::extract::Form;
-use axum::extract::State;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -11,13 +11,14 @@ pub struct PostCreateForm {
 
 pub async fn create(
     auth_session: AuthSession,
-    State(app): State<App>,
+    DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> String {
     let author = auth_session.user.expect("user should be logged in");
 
-    let post = model::Post::new(author, input.message);
-    let post = model::Post::insert(post, &app.database).await.unwrap();
+    let new_post = NewPost::new(author.id, &input.message);
+    let post = new_post.create(&mut conn).await.unwrap();
+    let post = PostWithAuthor::from_post(post, &mut conn).await.unwrap();
 
     let oob = view::PostForm {};
     let post = view::Post { post };
