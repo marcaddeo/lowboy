@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use super::user_data::UserData;
 use crate::app::Connection;
 use crate::model::user_data::NewUserData;
@@ -36,18 +34,30 @@ pub struct UserWithData {
     pub data: UserData,
 }
 
-impl Deref for UserWithData {
-    type Target = User;
-
-    fn deref(&self) -> &Self::Target {
-        &self.user
-    }
-}
-
 impl UserWithData {
     pub async fn from_user(user: User, conn: &mut Connection) -> QueryResult<Self> {
         let data = user.data(conn).await?;
         Ok(Self { user, data })
+    }
+
+    pub fn username(&self) -> &str {
+        &self.user.username
+    }
+
+    pub fn email(&self) -> &str {
+        &self.user.email
+    }
+
+    pub fn name(&self) -> &str {
+        &self.data.name
+    }
+
+    pub fn avatar(&self) -> Option<&str> {
+        self.data.avatar.as_deref()
+    }
+
+    pub fn byline(&self) -> Option<&str> {
+        self.data.byline.as_deref()
     }
 }
 

@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 use super::User;
 use super::UserWithData;
 use crate::app::Connection;
@@ -28,14 +26,6 @@ pub struct PostWithAuthor {
     pub author: UserWithData,
 }
 
-impl Deref for PostWithAuthor {
-    type Target = Post;
-
-    fn deref(&self) -> &Self::Target {
-        &self.post
-    }
-}
-
 impl PostWithAuthor {
     pub async fn from_post(post: Post, conn: &mut Connection) -> QueryResult<Self> {
         let user = post.user(conn).await?;
@@ -52,6 +42,10 @@ impl PostWithAuthor {
         }
 
         Ok(posts_with_author)
+    }
+
+    pub fn content(&self) -> &str {
+        &self.post.content
     }
 }
 
