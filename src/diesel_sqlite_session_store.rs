@@ -106,7 +106,10 @@ impl DieselSqliteSessionStore {
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
-        sql_query(query.to_string()).execute(&mut conn);
+        sql_query(query.to_string())
+            .execute(&mut conn)
+            .await
+            .map_err(DieselStoreError::Diesel)?;
 
         Ok(())
     }
@@ -166,7 +169,7 @@ impl SessionStore for DieselSqliteSessionStore {
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        while !try_create_with_conn(&mut conn, &record).await.unwrap() {
+        while !try_create_with_conn(&mut conn, record).await.unwrap() {
             record.id = Id::default(); // Generate a new ID
         }
 
@@ -189,7 +192,8 @@ impl SessionStore for DieselSqliteSessionStore {
                 .do_update()
                 .set(tower_session::expiry_date.eq(new_session.expiry_date))
                 .execute(conn)
-                .await;
+                .await
+                .map_err(DieselStoreError::Diesel)?;
 
             Ok(())
         }
@@ -199,7 +203,7 @@ impl SessionStore for DieselSqliteSessionStore {
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        save_with_conn(&mut conn, &record).await?;
+        save_with_conn(&mut conn, record).await?;
 
         Ok(())
     }

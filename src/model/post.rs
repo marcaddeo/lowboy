@@ -43,6 +43,10 @@ impl PostWithAuthor {
 
         Ok(posts_with_author)
     }
+
+    pub fn content(&self) -> &str {
+        &self.post.content
+    }
 }
 
 impl Post {

@@ -1,5 +1,3 @@
-use diesel::QueryResult;
-
 use crate::{
     app::{AuthSession, DatabaseConnection},
     model::{Post, PostWithAuthor, UserWithData},
@@ -12,7 +10,6 @@ pub async fn home(
 ) -> view::Home {
     let user = auth_session.user.expect("user should be logged in");
     let user = UserWithData::from_user(user, &mut conn).await.unwrap();
-    dbg!(&user);
     let posts = Post::list(&mut conn, Some(5)).await.unwrap();
     let posts = PostWithAuthor::from_posts(posts, &mut conn).await.unwrap();
 

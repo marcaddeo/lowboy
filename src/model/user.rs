@@ -39,6 +39,26 @@ impl UserWithData {
         let data = user.data(conn).await?;
         Ok(Self { user, data })
     }
+
+    pub fn username(&self) -> &str {
+        &self.user.username
+    }
+
+    pub fn email(&self) -> &str {
+        &self.user.email
+    }
+
+    pub fn name(&self) -> &str {
+        &self.data.name
+    }
+
+    pub fn avatar(&self) -> Option<&str> {
+        self.data.avatar.as_deref()
+    }
+
+    pub fn byline(&self) -> Option<&str> {
+        self.data.byline.as_deref()
+    }
 }
 
 impl User {
