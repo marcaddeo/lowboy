@@ -32,12 +32,12 @@ use oauth2::{
 };
 use password_auth::verify_password;
 use serde::Deserialize;
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tokio_cron_scheduler::JobScheduler;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
-use tracing::{info, warn};
+use tracing::info;
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 
@@ -203,9 +203,6 @@ impl App {
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-    Sqlx(#[from] sqlx::Error),
-
-    #[error(transparent)]
     Reqwest(reqwest::Error),
 
     #[error(transparent)]
@@ -215,7 +212,7 @@ pub enum Error {
     TaskJoin(#[from] tokio::task::JoinError),
 
     #[error(transparent)]
-    PoolError(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
+    Deadpool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
 
     #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
