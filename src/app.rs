@@ -14,7 +14,15 @@ use axum_login::{
 };
 use axum_messages::MessagesManagerLayer;
 use flume::{Receiver, Sender};
+use oauth2::{
+    basic::{BasicClient, BasicRequestTokenError},
+    http::header::{AUTHORIZATION, USER_AGENT},
+    reqwest::{async_http_client, AsyncHttpClientError},
+    url::Url,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, TokenResponse as _, TokenUrl,
+};
 use password_auth::verify_password;
+use serde::Deserialize;
 use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::time::Duration;
 use tokio::{signal, task::AbortHandle};
@@ -22,13 +30,14 @@ use tokio_cron_scheduler::JobScheduler;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
 use tower_sessions_sqlx_store::SqliteStore;
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct App {
     pub database: SqlitePool,
     pub events: (Sender<Event>, Receiver<Event>),
     pub scheduler: JobScheduler,
+    pub oauth: BasicClient,
 }
 
 impl App {
@@ -49,13 +58,25 @@ impl App {
             .expect("job scheduler should be created");
         scheduler.start().await.expect("scheduler should start");
 
+        let client_id = std::env::var("CLIENT_ID")
+            .map(ClientId::new)
+            .expect("CLIENT_ID should be provided.");
+        let client_secret = std::env::var("CLIENT_SECRET")
+            .map(ClientSecret::new)
+            .expect("CLIENT_SECRET should be provided");
+
+        let auth_url = AuthUrl::new("https://github.com/login/oauth/authorize".to_string())?;
+        let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?;
+        let oauth = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url));
+
         let app = Self {
             database,
             events: (tx, rx),
             scheduler,
+            oauth,
         };
 
-        app.generate_posts().await;
+        // app.generate_posts().await;
 
         Ok(app)
     }
@@ -92,6 +113,7 @@ impl App {
             // Auth routes.
             .route("/login", get(controller::auth::form))
             .route("/login", post(controller::auth::login))
+            .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
@@ -129,6 +151,11 @@ impl App {
         }
     }
 
+    pub fn authorize_url(&self) -> (Url, CsrfToken) {
+        self.oauth.authorize_url(CsrfToken::new_random).url()
+    }
+
+    #[allow(dead_code)]
     async fn generate_posts(&self) {
         let app = self.clone();
         self.scheduler
@@ -153,10 +180,7 @@ impl App {
                         )
                         .unwrap();
 
-                        info!(
-                            "Added new post by: {} {}",
-                            post.author.first_name, post.author.last_name
-                        );
+                        info!("Added new post by: {}", post.author.data.name);
                     })
                 })
                 .expect("job creation should succeed"),
@@ -173,7 +197,21 @@ pub enum Error {
     Sqlx(#[from] sqlx::Error),
 
     #[error(transparent)]
+    Reqwest(reqwest::Error),
+
+    #[error(transparent)]
+    OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
+
+    #[error(transparent)]
     TaskJoin(#[from] tokio::task::JoinError),
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitHubUserInfo {
+    pub login: String,
+    pub email: String,
+    pub avatar_url: String,
+    pub name: String,
 }
 
 #[async_trait]
@@ -184,22 +222,84 @@ impl AuthnBackend for App {
 
     async fn authenticate(
         &self,
-        creds: Self::Credentials,
+        credentials: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let user = model::User::find_by_username(&creds.username, &self.database)
-            .await
-            .ok();
+        use model::CredentialKind;
 
-        let Some(user) = user else {
-            return Ok(None);
-        };
+        match credentials.kind {
+            CredentialKind::Password => {
+                let credentials = credentials
+                    .password
+                    .expect("CredentialKind::Password password field should not be none");
+                let user = model::User::find_by_username_with_password(
+                    &credentials.username,
+                    &self.database,
+                )
+                .await
+                .ok();
 
-        tokio::task::spawn_blocking(|| {
-            Ok(verify_password(creds.password, &user.password)
-                .is_ok()
-                .then_some(user))
-        })
-        .await?
+                let Some(user) = user else {
+                    return Ok(None);
+                };
+
+                if user.password.is_none() {
+                    return Ok(None);
+                }
+
+                tokio::task::spawn_blocking(|| {
+                    Ok(verify_password(
+                        credentials.password,
+                        user.password.as_ref().expect("checked is_none"),
+                    )
+                    .is_ok()
+                    .then_some(user))
+                })
+                .await?
+            }
+            CredentialKind::OAuth => {
+                let credentials = credentials
+                    .oauth
+                    .expect("CredentialKind::OAuth oauth field should not be none");
+                // Ensure the CSRF state has not been tampered with.
+                if credentials.old_state.secret() != credentials.new_state.secret() {
+                    return Ok(None);
+                };
+
+                // Process authorization code, expecting a token response back.
+                let token_res = self
+                    .oauth
+                    .exchange_code(AuthorizationCode::new(credentials.code))
+                    .request_async(async_http_client)
+                    .await
+                    .map_err(Self::Error::OAuth2)?;
+
+                // Use access token to request user info.
+                let user_info = reqwest::Client::new()
+                    .get("https://api.github.com/user")
+                    .header(USER_AGENT.as_str(), "lowboy")
+                    .header(
+                        AUTHORIZATION.as_str(),
+                        format!("Bearer {}", token_res.access_token().secret()),
+                    )
+                    .send()
+                    .await
+                    .map_err(Self::Error::Reqwest)?
+                    .json::<GitHubUserInfo>()
+                    .await
+                    .map_err(Self::Error::Reqwest)?;
+
+                // Persist user in our database so we can use `get_user`.
+
+                let mut user = model::User::from(user_info);
+                user.access_token = Some(token_res.access_token().secret().to_string());
+                let user = model::User::insert(&user, &self.database)
+                    .await
+                    .map_err(|e| warn!("{}", e))
+                    .expect("shrug");
+
+                Ok(Some(user))
+            }
+        }
     }
 
     async fn get_user(

@@ -1,4 +1,8 @@
-use crate::{app::AuthSession, model, view};
+use crate::{
+    app::AuthSession,
+    model::{CredentialKind, Credentials, OAuthCredentials},
+    view,
+};
 use axum::{
     extract::Query,
     http::StatusCode,
@@ -6,12 +10,23 @@ use axum::{
     Form,
 };
 use axum_messages::Messages;
+use oauth2::CsrfToken;
 use serde::Deserialize;
+use tower_sessions::Session;
 use tracing::warn;
+
+pub const NEXT_URL_KEY: &str = "auth.next-url";
+pub const CSRF_STATE_KEY: &str = "oauth.csrf-state";
 
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
     next: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct AuthzResp {
+    code: String,
+    state: CsrfToken,
 }
 
 pub async fn form(messages: Messages, Query(NextUrl { next }): Query<NextUrl>) -> view::Login {
@@ -24,45 +39,122 @@ pub async fn form(messages: Messages, Query(NextUrl { next }): Query<NextUrl>) -
 }
 
 pub async fn login(
-    mut session: AuthSession,
+    mut auth_session: AuthSession,
+    session: Session,
     messages: Messages,
-    Form(creds): Form<model::Credentials>,
+    Form(input): Form<Credentials>,
 ) -> impl IntoResponse {
-    let user = match session.authenticate(creds.clone()).await {
-        Ok(Some(user)) => user,
-        Ok(None) => {
-            messages.error("Invalid credentials");
+    match input.kind {
+        CredentialKind::Password => {
+            let credentials = input
+                .password
+                .as_ref()
+                .expect("CredentialKind::Password password field should not be none");
 
-            let login_url = if let Some(next) = creds.next {
-                format!("/login?next={}", next)
-            } else {
-                "/login".to_string()
+            let user = match auth_session.authenticate(input.clone()).await {
+                Ok(Some(user)) => user,
+                Ok(None) => {
+                    messages.error("Invalid credentials");
+
+                    let login_url = if let Some(next) = input.next {
+                        format!("/login?next={}", next)
+                    } else {
+                        "/login".to_string()
+                    };
+
+                    return Redirect::to(&login_url).into_response();
+                }
+                Err(e) => {
+                    warn!("Error authenticating user({}): {}", credentials.username, e);
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+                }
             };
 
-            return Redirect::to(&login_url).into_response();
+            match auth_session.login(&user).await {
+                Ok(_) => (),
+                Err(e) => {
+                    warn!("Error logging in user({}): {}", user.username, e);
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+                }
+            }
+
+            messages.success(format!("Successfully logged in as {}", user.username));
+
+            if let Some(ref next) = input.next {
+                Redirect::to(next)
+            } else {
+                Redirect::to("/")
+            }
+            .into_response()
         }
-        Err(e) => {
-            warn!("Error authenticating user({}): {}", creds.username, e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+        CredentialKind::OAuth => {
+            let (auth_url, csrf_state) = auth_session.backend.authorize_url();
+
+            session
+                .insert(CSRF_STATE_KEY, csrf_state.secret())
+                .await
+                .expect("Serialization should not fail");
+
+            session
+                .insert(NEXT_URL_KEY, input.next)
+                .await
+                .expect("Serialization should not fail");
+
+            Redirect::to(auth_url.as_str()).into_response()
         }
+    }
+}
+
+pub async fn oauth(
+    mut auth_session: AuthSession,
+    messages: Messages,
+    session: Session,
+    Query(AuthzResp {
+        code,
+        state: new_state,
+    }): Query<AuthzResp>,
+) -> impl IntoResponse {
+    let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY).await else {
+        return StatusCode::BAD_REQUEST.into_response();
     };
 
-    match session.login(&user).await {
-        Ok(_) => (),
-        Err(e) => {
-            warn!("Error logging in user({}): {}", user.username, e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+    let credentials = Credentials {
+        kind: CredentialKind::OAuth,
+        password: None,
+        oauth: Some(OAuthCredentials {
+            code,
+            old_state,
+            new_state,
+        }),
+        next: None,
+    };
+
+    let user = match auth_session.authenticate(credentials).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            let messages = messages.error("Invalid CSRF state");
+            return (
+                StatusCode::UNAUTHORIZED,
+                view::Login {
+                    messages: messages.into_iter().collect(),
+                    next: None,
+                    version_string: "".to_string(),
+                },
+            )
+                .into_response();
         }
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if auth_session.login(&user).await.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    messages.success(format!("Successfully logged in as {}", user.username));
-
-    if let Some(ref next) = creds.next {
-        Redirect::to(next)
+    if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY).await {
+        Redirect::to(&next).into_response()
     } else {
-        Redirect::to("/")
+        Redirect::to("/").into_response()
     }
-    .into_response()
 }
 
 pub async fn logout(mut session: AuthSession) -> impl IntoResponse {

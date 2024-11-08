@@ -21,7 +21,7 @@ pub struct Post {
 #[derive(FromRow)]
 pub struct PostRow {
     pub id: i64,
-    pub author_id: i64,
+    pub user_id: i64,
     pub content: String,
 }
 
@@ -34,6 +34,7 @@ impl Post {
         }
     }
 
+    #[allow(dead_code)]
     pub fn fake() -> Self {
         Faker.fake()
     }
@@ -45,7 +46,7 @@ impl Post {
             .deref()
             .expect("post should have an associated author with an id");
         let row = sqlx::query!(
-            "INSERT INTO post (author_id, content) VALUES (?, ?) RETURNING *",
+            "INSERT INTO post (user_id, content) VALUES (?, ?) RETURNING *",
             author_id,
             post.content
         )
@@ -85,7 +86,7 @@ impl Post {
     }
 
     async fn build_post(row: PostRow, db: &SqlitePool) -> Result<Post> {
-        let author = User::find_by_id(row.author_id, db).await?;
+        let author = User::find_by_id(row.user_id, db).await?;
         Ok(Post {
             id: Id(Some(row.id)),
             author,

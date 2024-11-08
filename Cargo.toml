@@ -15,10 +15,14 @@ axum-extra = { version = "0.9.4", features = ["typed-header"] }
 axum-login = "0.16.0"
 axum-messages = "0.7.0"
 derive-masked = "0.1.0"
+derive_builder = "0.20.2"
+derive_more = { version = "1.0.0", features = ["display"] }
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
+oauth2 = "4.4.2"
 password-auth = "1.0.0"
+reqwest = { version = "0.12.9", features = ["json"] }
 serde = { version = "1.0.214", features = ["serde_derive"] }
 sqlx = { version = "0.8.2", features = ["runtime-tokio", "sqlite"] }
 thiserror = "1.0.66"
