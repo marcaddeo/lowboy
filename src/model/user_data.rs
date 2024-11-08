@@ -14,6 +14,20 @@ pub struct UserData {
     pub byline: Option<String>,
 }
 
+impl UserData {
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn avatar(&self) -> Option<&String> {
+        self.avatar.as_ref()
+    }
+
+    pub fn byline(&self) -> Option<&String> {
+        self.byline.as_ref()
+    }
+}
+
 #[derive(Clone, Debug, Default, Insertable, AsChangeset)]
 #[diesel(table_name = crate::schema::user_data)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]

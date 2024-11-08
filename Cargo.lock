@@ -533,6 +533,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "defile"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fa3324a455850286c803c1c16d3835a44a9457765899417775e4dc6080cd942d"
+dependencies = [
+ "defile-proc_macros",
+]
+
+[[package]]
+name = "defile-proc_macros"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "87c5c1460bfb0f719e899feab6ae532e5e0f059cdc85913bab8e6a0d7980245e"
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1344,6 +1359,7 @@ dependencies = [
  "chrono",
  "deadpool",
  "deadpool-diesel",
+ "defile",
  "derive-masked",
  "derive_builder",
  "derive_more",
@@ -1355,6 +1371,7 @@ dependencies = [
  "futures",
  "oauth2",
  "password-auth",
+ "paste",
  "reqwest 0.12.9",
  "rmp-serde",
  "serde",
