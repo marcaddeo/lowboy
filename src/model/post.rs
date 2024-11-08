@@ -127,7 +127,7 @@ mod p {
             zomg!(new-record ( $(@$next)* ) -> { $($output)* ($field : $type) });
         });
 
-        (@record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident: $type:ty))* }) => {
+        (record () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident: $type:ty))* }) => {
             paste! {
                 $(#[$attr])*
                 $pub struct [<$name Record>] {
@@ -138,43 +138,42 @@ mod p {
             zomg!(new-record ( $($field : $type),* ) -> { $pub $name });
         };
 
-        (@record ( $field:ident : Zomg<$type:ty>, $($next:tt)* ) -> { $($output:tt)* }) => {
+        (record ( $field:ident : Zomg<$type:ty>, $($next:tt)* ) -> { $($output:tt)* }) => {
             paste! {
-                zomg!(@record ( $($next)* ) -> { $($output)* ([<$field _id>] : i32) });
+                zomg!(record ( $($next)* ) -> { $($output)* ([<$field _id>] : i32) });
             }
         };
 
-        (@record ( $field:ident : $type:ty ) -> { $($output:tt)* }) => {
-            zomg!(@record () -> { $($output)* ($field : $type) });
+        (record ( $field:ident : $type:ty ) -> { $($output:tt)* }) => {
+            zomg!(record () -> { $($output)* ($field : $type) });
         };
 
-        (@record ( $field:ident : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => {
-            zomg!(@record ( $($next)* ) -> { $($output)* ($field : $type) });
+        (record ( $field:ident : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => {
+            zomg!(record ( $($next)* ) -> { $($output)* ($field : $type) });
         };
 
-        (@model () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident: $type:ty))* }) => {
+        (model () -> { $(#[$attr:meta])* $pub:vis $name:ident $(($field:ident: $type:ty))* }) => {
             $pub struct $name {
                 $($field : $type),*
             }
         };
 
-        (@model ( $field:ident : Zomg<$type:ty>, $($next:tt)* ) -> { $($output:tt)* }) => {
-            zomg!(@model ( $($next)* ) -> { $($output)* ($field : $type) });
+        (model ( $field:ident : Zomg<$type:ty>, $($next:tt)* ) -> { $($output:tt)* }) => {
+            zomg!(model ( $($next)* ) -> { $($output)* ($field : $type) });
         };
 
-        (@model ( $field:ident : $type:ty ) -> { $($output:tt)* }) => {
-            zomg!(@model () -> { $($output)* ($field : $type) });
+        (model ( $field:ident : $type:ty ) -> { $($output:tt)* }) => {
+            zomg!(model () -> { $($output)* ($field : $type) });
         };
 
-        (@model ( $field:ident : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => {
-            zomg!(@model ( $($next)* ) -> { $($output)* ($field : $type) });
+        (model ( $field:ident : $type:ty, $($next:tt)* ) -> { $($output:tt)* }) => {
+            zomg!(model ( $($next)* ) -> { $($output)* ($field : $type) });
         };
 
-        // Entry point zomg!(struct { .. });
         ($(#[$attr:meta])* $pub:vis struct $name:ident { $($fields:tt)* } ) => {
-            zomg!(@model ( $($fields)* ) -> { $pub $name });
+            zomg!(model ( $($fields)* ) -> { $pub $name });
 
-            zomg!(@record ( $($fields)* ) -> { $(#[$attr])* $pub $name });
+            zomg!(record ( $($fields)* ) -> { $(#[$attr])* $pub $name });
         };
     }
 
