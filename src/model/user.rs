@@ -40,24 +40,24 @@ impl UserWithData {
         Ok(Self { user, data })
     }
 
-    pub fn username(&self) -> &str {
-        &self.user.username
+    pub fn email(&self) -> &str {
+        self.user.email()
     }
 
-    pub fn email(&self) -> &str {
-        &self.user.email
+    pub fn username(&self) -> &str {
+        self.user.username()
+    }
+
+    pub fn avatar(&self) -> Option<&String> {
+        self.data.avatar()
+    }
+
+    pub fn byline(&self) -> Option<&String> {
+        self.data.byline()
     }
 
     pub fn name(&self) -> &str {
-        &self.data.name
-    }
-
-    pub fn avatar(&self) -> Option<&str> {
-        self.data.avatar.as_deref()
-    }
-
-    pub fn byline(&self) -> Option<&str> {
-        self.data.byline.as_deref()
+        self.data.name()
     }
 }
 
@@ -89,6 +89,14 @@ impl User {
             .select(user_data::table::all_columns())
             .first(conn)
             .await
+    }
+
+    pub fn username(&self) -> &str {
+        &self.username
+    }
+
+    pub fn email(&self) -> &str {
+        &self.email
     }
 }
 
