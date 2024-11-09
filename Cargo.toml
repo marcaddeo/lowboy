@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 build = "build.rs"
 
+[workspace]
+members = ["lowboy_record"]
+
 [dependencies]
 anyhow = "1.0.92"
 askama = { git = "https://github.com/djc/askama", features = ["with-axum"] }
@@ -21,7 +24,6 @@ deadpool-diesel = { version = "0.6.1", features = [
     "serde",
     "tracing",
 ] }
-defile = "0.2.1"
 derive-masked = "0.1.0"
 derive_builder = "0.20.2"
 derive_more = { version = "1.0.0", features = ["debug", "display"] }
@@ -37,7 +39,6 @@ flume = "0.11.1"
 futures = "0.3.31"
 oauth2 = "4.4.2"
 password-auth = "1.0.0"
-paste = "1.0.15"
 reqwest = { version = "0.12.9", features = ["json"] }
 rmp-serde = "1.3.0"
 serde = { version = "1.0.214", features = ["serde_derive"] }
