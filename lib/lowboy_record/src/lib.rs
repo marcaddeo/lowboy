@@ -168,7 +168,7 @@ macro_rules! internal_record {
             }
         }
 
-        internal_new_record!($pub $model ($($field : $type ,)*));
+        internal_new_record!($pub $model ($($field_vis $field : $type ,)*));
     };
 
     // Strip out HasOne fields. These fields are "virtual" and used for one-to-one relations.
@@ -329,7 +329,7 @@ macro_rules! internal_new_record {
 
     // Remove id field.
     (@new_record
-        (id : $type:ty $(, $($rest:tt)*)?)
+        ($pub:vis id : $type:ty $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
@@ -418,8 +418,8 @@ macro_rules! internal_impl {
         ()
         -> { $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
         [ $(($key:ident ; $foreign_vis:vis $foreign_key:ident : $foreign_model:ty))* ]
-        [ $(($many:ident : $many_vis:vis $many_model:ty))* ]
-        [ $(( $has_one_vis:vis $has_one:ident : $has_one_model:ty))* ]
+        [ $(($many_vis:vis $many:ident : $many_model:ty))* ]
+        [ $(($has_one_vis:vis $has_one:ident : $has_one_model:ty))* ]
     ) => {
         // impl Model
         impl $model {
@@ -516,7 +516,7 @@ macro_rules! internal_impl {
         [ $($has_one:tt)* ]
     ) => {
         paste! {
-            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ] [ $($has_one)* ( $pub $field : $type) ]);
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ] [ $($has_one)* ($pub $field : $type) ]);
         }
     };
 
