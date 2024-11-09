@@ -243,7 +243,7 @@ dependencies = [
  "form_urlencoded",
  "serde",
  "subtle",
- "thiserror",
+ "thiserror 1.0.66",
  "tower-cookies",
  "tower-layer",
  "tower-service",
@@ -1374,7 +1374,7 @@ dependencies = [
  "reqwest 0.12.9",
  "rmp-serde",
  "serde",
- "thiserror",
+ "thiserror 2.0.1",
  "tokio",
  "tokio-cron-scheduler",
  "tower 0.5.1",
@@ -1589,7 +1589,7 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "sha2",
- "thiserror",
+ "thiserror 1.0.66",
  "url",
 ]
 
@@ -2371,7 +2371,16 @@ version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d171f59dbaa811dbbb1aee1e73db92ec2b122911a48e1390dfe327a821ddede"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.66",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07c1e40dd48a282ae8edc36c732cbc219144b87fb6a4c7316d611c6b1f06ec0c"
+dependencies = [
+ "thiserror-impl 2.0.1",
 ]
 
 [[package]]
@@ -2379,6 +2388,17 @@ name = "thiserror-impl"
 version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b08be0f17bd307950653ce45db00cd31200d82b624b36e181337d9c7d92765b5"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "874aa7e446f1da8d9c3a5c95b1c5eb41d800045252121dc7f8e0ba370cee55f5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2680,7 +2700,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 1.0.66",
  "time",
  "tokio",
  "tracing",
