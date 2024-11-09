@@ -1,5 +1,15 @@
-pub extern crate defile;
-pub extern crate paste;
+#[doc(hidden)]
+pub use defile::defile;
+#[doc = "Apply a `macro_rules!` macro using an `#[apply(macro_name!)]` attribute (provided by `macro_rules_attribute` crate)"]
+pub use macro_rules_attribute::apply;
+#[doc(hidden)]
+pub use paste::paste;
+
+pub mod prelude {
+    pub use crate::apply;
+    pub use crate::lowboy_record;
+    pub use crate::Related;
+}
 
 /// A marker to designate a field as being a related model.
 pub struct Related<T>(T);
@@ -9,13 +19,11 @@ pub struct Related<T>(T);
 /// # Example
 ///
 /// ```
-/// # #[macro_use] extern crate lowboy_record;
-/// # #[macro_use] extern crate defile;
-/// # #[macro_use] extern crate paste;
 /// use diesel::prelude::*;
 /// # use diesel::sqlite::SqliteConnection;
 /// # use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 /// use diesel_async::RunQueryDsl;
+/// use lowboy_record::prelude::*;
 /// # // Connection type in Lowboy.
 /// # type Connection = SyncConnectionWrapper<SqliteConnection>;
 ///
@@ -49,7 +57,7 @@ pub struct Related<T>(T);
 /// }
 ///
 /// # fn main() {
-/// lowboy_record!(
+/// lowboy_record! {
 ///     #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable)]
 ///     #[diesel(table_name = crate::schema::user)]
 ///     pub struct User {
@@ -58,9 +66,9 @@ pub struct Related<T>(T);
 ///         avatar: Option<String>,
 ///         posts: Related<Vec<Post>>,
 ///     }
-/// );
+/// }
 ///
-/// lowboy_record!(
+/// lowboy_record! {
 ///     #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
 ///     #[diesel(table_name = crate::schema::post)]
 ///     #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
@@ -69,23 +77,23 @@ pub struct Related<T>(T);
 ///         user: Related<User>,
 ///         content: String,
 ///     }
-/// );
+/// }
 ///
-/// lowboy_record!(
-///     #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
-///     #[diesel(table_name = crate::schema::comment)]
-///     #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
-///     #[diesel(belongs_to(PostRecord, foreign_key = post_id))]
-///     pub struct Comment {
-///         id: i32,
-///         user: Related<User>,
-///         post: Related<Post>,
-///         content: String,
-///     }
-/// );
+/// // Using the #[apply(macro_name!)] attribute to avoid unnecessary indentation.
+/// #[apply(lowboy_record!)]
+/// #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
+/// #[diesel(table_name = crate::schema::comment)]
+/// #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
+/// #[diesel(belongs_to(PostRecord, foreign_key = post_id))]
+/// pub struct Comment {
+///     id: i32,
+///     user: Related<User>,
+///     post: Related<Post>,
+///     content: String,
+/// }
 /// # }
 /// ```
-#[macro_export]
+#[macro_export(local_inner_macros)]
 macro_rules! lowboy_record {
     // Main entrypoint.
     (
@@ -96,15 +104,15 @@ macro_rules! lowboy_record {
     ) => {
         // ModelRecord
         // NewModelRecord
-        $crate::internal_record!($(#[$attr])* $pub $model ($($fields)*));
+        internal_record!($(#[$attr])* $pub $model ($($fields)*));
         // Model
-        $crate::internal_model!($pub $model ($($fields)*));
+        internal_model!($pub $model ($($fields)*));
         // impl Model
-        $crate::internal_impl!($model ($($fields)*));
+        internal_impl!($model ($($fields)*));
     };
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 macro_rules! internal_record {
     // Done, generate struct.
@@ -114,7 +122,7 @@ macro_rules! internal_record {
         [$(($from:ident : $from_type:ty))*]
         [$(($from_related: ident: $from_related_model:ty))*]
     ) => {
-        $crate::paste::paste! {
+        paste! {
             // ModelRecord
             $(#[$attr])*
             #[doc = "A `" $model "` record"]
@@ -138,7 +146,7 @@ macro_rules! internal_record {
             }
         }
 
-        $crate::internal_new_record!($pub $model ($($field : $type ,)*));
+        internal_new_record!($pub $model ($($field : $type ,)*));
     };
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
@@ -148,8 +156,8 @@ macro_rules! internal_record {
         [$($from:tt)*]
         [$($from_related:tt)*]
     ) => {
-        $crate::paste::paste! {
-            $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* } [$($from)*] [$($from_related)*]);
+        paste! {
+            internal_record!(@record ($($($rest)*)?) -> { $($output)* } [$($from)*] [$($from_related)*]);
         }
     };
 
@@ -160,8 +168,8 @@ macro_rules! internal_record {
         [$($from:tt)*]
         [$($from_related:tt)*]
     ) => {
-        $crate::paste::paste! {
-            $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) } [$($from)*] [$($from_related)* ([<$field _id>] : $type)]);
+        paste! {
+            internal_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) } [$($from)*] [$($from_related)* ([<$field _id>] : $type)]);
         }
     };
 
@@ -177,16 +185,16 @@ macro_rules! internal_record {
         // Accumulator of related fields to copy ids from related Model to ModelRecord.
         [$($from_related:tt)*]
     ) => {
-        $crate::internal_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) } [$($from)* ($field : $type)] [$($from_related)*]);
+        internal_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) } [$($from)* ($field : $type)] [$($from_related)*]);
     };
 
     // Entrypoint.
     ($(#[$attr:meta])* $pub:vis $model:ident ($($rest:tt)*)) => {
-        $crate::internal_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $model } [] []);
+        internal_record!(@record ($($rest)*) -> { $(#[$attr])* $pub $model } [] []);
     };
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_new_record {
@@ -196,7 +204,7 @@ macro_rules! internal_new_record {
         -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
         [ $(($option:ident : $option_type:ty))* ]
     ) => {
-        $crate::paste::paste! {
+        paste! {
             // NewModelRecord
             #[derive(Clone, Debug, Default, diesel::Insertable)]
             #[diesel(table_name = crate::schema::[<$model:lower>])]
@@ -258,8 +266,8 @@ macro_rules! internal_new_record {
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
-        $crate::defile::defile! {
-            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<&'a str>) ]);
+        defile! {
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<&'a str>) ]);
         }
     };
 
@@ -269,8 +277,8 @@ macro_rules! internal_new_record {
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
-        $crate::defile::defile! {
-            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<$type>) ]);
+        defile! {
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<$type>) ]);
         }
     };
 
@@ -280,8 +288,8 @@ macro_rules! internal_new_record {
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
-        $crate::defile::defile! {
-            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) } [ $($optional)* ]);
+        defile! {
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) } [ $($optional)* ]);
         }
     };
 
@@ -291,8 +299,8 @@ macro_rules! internal_new_record {
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
-        $crate::defile::defile! {
-            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ]);
+        defile! {
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ]);
         }
     };
 
@@ -306,18 +314,18 @@ macro_rules! internal_new_record {
         // Accumulator of optional NewModelRecord fields.
         [ $($optional:tt)* ]
     ) => {
-        $crate::defile::defile! {
-            $crate::internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) } [ $($optional)* ]);
+        defile! {
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) } [ $($optional)* ]);
         }
     };
 
     // Entrypoint.
     ($pub:vis $model:ident ($($rest:tt)*)) => {
-        $crate::internal_new_record!(@new_record ($($rest)*) -> { $pub $model } []);
+        internal_new_record!(@new_record ($($rest)*) -> { $pub $model } []);
     };
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 macro_rules! internal_model {
     // Done, generate struct.
@@ -325,7 +333,7 @@ macro_rules! internal_model {
         ()
         -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
     ) => {
-        $crate::paste::paste! {
+        paste! {
             // Model
             #[derive(Debug, Clone)]
             #[doc = "A `" $model "` model"]
@@ -340,7 +348,7 @@ macro_rules! internal_model {
         ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
     ) => {
-        $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Iterate over struct fields.
@@ -350,16 +358,16 @@ macro_rules! internal_model {
         // Accumulator of Model output (attrs, visibility, model name, (model fields)).
         -> { $($output:tt)* }
     ) => {
-        $crate::internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
     };
 
     // Entrypoint.
     ($pub:vis $model:ident ($($rest:tt)*)) => {
-        $crate::internal_model!(@model ($($rest)*) -> { $pub $model });
+        internal_model!(@model ($($rest)*) -> { $pub $model });
     };
 }
 
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 #[allow(clippy::crate_in_macro_def)]
 macro_rules! internal_impl {
@@ -372,7 +380,7 @@ macro_rules! internal_impl {
     ) => {
         // impl Model
         impl $model {
-            $crate::paste::paste! {
+            paste! {
                 // Model::from_record
                 #[doc = "Create a `" $model "` object from a `" [<$model Record>] "`"]
                 #[doc = "This will also load child models, excluding one-to-many children."]
@@ -390,7 +398,7 @@ macro_rules! internal_impl {
                         $(
                             $field : record.$field.clone(),
                         )*
-                        $($many : vec![] ,)*
+                        $($many : Vec::new() ,)*
                     })
                 }
 
@@ -401,7 +409,7 @@ macro_rules! internal_impl {
                     records: impl IntoIterator<Item = &'a [<$model Record>]>,
                     conn: &'a mut Connection,
                 ) -> QueryResult<Vec<Self>> {
-                    let mut models = vec![];
+                    let mut models = Vec::new();
                     for record in records.into_iter() {
                         models.push(Self::from_record(record, conn).await?);
                     }
@@ -419,7 +427,7 @@ macro_rules! internal_impl {
                         .load(conn)
                         .await?;
 
-                    let mut $many = vec![];
+                    let mut $many = Vec::new();
                     for record in &records {
                         $many.push($many_model::from_record(record, conn).await?);
                     }
@@ -442,8 +450,8 @@ macro_rules! internal_impl {
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
     ) => {
-        $crate::paste::paste! {
-            $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($field : $type) ]);
+        paste! {
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($field : $type) ]);
         }
     };
 
@@ -454,8 +462,8 @@ macro_rules! internal_impl {
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
     ) => {
-        $crate::paste::paste! {
-            $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ] [ $($many)* ]);
+        paste! {
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ] [ $($many)* ]);
         }
     };
 
@@ -470,11 +478,11 @@ macro_rules! internal_impl {
         // Accumulator of model child collections.
         [ $($many:tt)* ]
     ) => {
-        $crate::internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ] [ $($many)* ]);
+        internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ] [ $($many)* ]);
     };
 
     // Entrypoint.
     ($model:ident ($($rest:tt)*)) => {
-        $crate::internal_impl!(@impl ($($rest)*) -> { $model } [] []);
+        internal_impl!(@impl ($($rest)*) -> { $model } [] []);
     };
 }
