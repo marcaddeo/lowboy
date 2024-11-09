@@ -5,7 +5,7 @@ edition = "2021"
 build = "build.rs"
 
 [workspace]
-members = ["lowboy_record"]
+members = ["lib/lowboy_record"]
 
 [dependencies]
 anyhow = "1.0.92"
@@ -37,6 +37,7 @@ diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
+lowboy_record = { version = "0.1.0", path = "lib/lowboy_record" }
 oauth2 = "4.4.2"
 password-auth = "1.0.0"
 reqwest = { version = "0.12.9", features = ["json"] }
