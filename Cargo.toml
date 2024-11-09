@@ -61,3 +61,6 @@ xdg = "2.5.2"
 anyhow = "1.0.92"
 tokio = { version = "1.41.0", features = ["full"] }
 vergen-gitcl = "1.0.1"
+
+[dev-dependencies]
+tower-livereload = "0.9.4"

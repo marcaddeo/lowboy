@@ -136,8 +136,11 @@ impl App {
             .route("/logout", get(controller::auth::logout))
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
-            .layer(LiveReloadLayer::new())
             .with_state(self);
+
+        // Enable livereload for debug builds.
+        #[cfg(debug_assertions)]
+        let router = router.layer(LiveReloadLayer::new());
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
         info!("listening on {}", listener.local_addr().unwrap());
