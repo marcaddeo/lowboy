@@ -1,7 +1,7 @@
 use crate::{
     controller,
     diesel_sqlite_session_store::DieselSqliteSessionStore,
-    model::{self, NewUser, User},
+    model::{self, NewUserRecord, User, UserRecord},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -228,7 +228,7 @@ pub struct GitHubUserInfo {
 
 #[async_trait]
 impl AuthnBackend for App {
-    type User = User;
+    type User = UserRecord;
     type Credentials = model::Credentials;
     type Error = Error;
 
@@ -254,7 +254,7 @@ impl AuthnBackend for App {
                         user.password.as_ref().expect("checked is_none"),
                     )
                     .is_ok()
-                    .then_some(user))
+                    .then_some(user.into()))
                 })
                 .await?
             }
@@ -292,9 +292,13 @@ impl AuthnBackend for App {
 
                 // Persist user in our database so we can use `get_user`.
                 let access_token = token_res.access_token().secret();
-                let new_user =
-                    NewUser::new(&user_info.login, &user_info.email, None, Some(access_token));
-                let user = new_user
+                let new_user = NewUserRecord {
+                    username: &user_info.login,
+                    email: &user_info.email,
+                    password: None,
+                    access_token: Some(access_token),
+                };
+                let record = new_user
                     .create_or_update(
                         &user_info.name,
                         None,
@@ -303,7 +307,7 @@ impl AuthnBackend for App {
                     )
                     .await?;
 
-                Ok(Some(user))
+                Ok(Some(record))
             }
         }
     }
@@ -313,7 +317,7 @@ impl AuthnBackend for App {
         user_id: &axum_login::UserId<Self>,
     ) -> Result<Option<Self::User>, Self::Error> {
         let mut conn = self.database.get().await?;
-        Ok(Some(User::find(*user_id, &mut conn).await?))
+        Ok(Some(User::find(*user_id, &mut conn).await?.into()))
     }
 }
 
