@@ -37,11 +37,7 @@ use std::time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tokio_cron_scheduler::JobScheduler;
 use tower_http::services::ServeDir;
-use tower_livereload::LiveReloadLayer;
-use tower_sessions::{
-    cookie::{self, Key},
-    session,
-};
+use tower_sessions::cookie::{self, Key};
 use tracing::{info, warn};
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
@@ -50,6 +46,7 @@ pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 pub struct App {
     pub database: Pool<SyncConnectionWrapper<SqliteConnection>>,
     pub events: (Sender<Event>, Receiver<Event>),
+    #[allow(dead_code)]
     pub scheduler: JobScheduler,
     pub oauth: BasicClient,
 }
@@ -140,7 +137,7 @@ impl App {
 
         // Enable livereload for debug builds.
         #[cfg(debug_assertions)]
-        let router = router.layer(LiveReloadLayer::new());
+        let (router, _watcher) = livereload(router)?;
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
         info!("listening on {}", listener.local_addr().unwrap());
@@ -364,4 +361,27 @@ where
     E: std::error::Error,
 {
     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
+
+#[cfg(debug_assertions)]
+fn not_htmx_predicate<T>(req: &axum::extract::Request<T>) -> bool {
+    !req.headers().contains_key("hx-request")
+}
+
+#[cfg(debug_assertions)]
+fn livereload(router: axum::Router) -> Result<(axum::Router, notify::FsEventWatcher)> {
+    use notify::Watcher;
+
+    let livereload = tower_livereload::LiveReloadLayer::new();
+    let reloader = livereload.reloader();
+
+    let router = router.layer(livereload.request_predicate(not_htmx_predicate));
+
+    let mut watcher = notify::recommended_watcher(move |_| reloader.reload())?;
+    watcher.watch(
+        std::path::Path::new("static"),
+        notify::RecursiveMode::Recursive,
+    )?;
+
+    Ok((router, watcher))
 }
