@@ -20,12 +20,11 @@
 ### Requirements
 
 - [just](https://just.systems)
-- [sqlx-cli](https://crates.io/crates/sqlx-cli)
+- [Diesel CLI](https://diesel.rs/guides/getting-started.html#installing-diesel-cli)
 
 ### Setup
 
 ```console
-$ sqlx-cli database create
-$ sqlx-cli migrate run
+$ diesel setup
 $ just watch
 ```
