@@ -8,11 +8,15 @@ pub use paste::paste;
 pub mod prelude {
     pub use crate::apply;
     pub use crate::lowboy_record;
+    pub use crate::HasOne;
     pub use crate::Related;
 }
 
 /// A marker to designate a field as being a related model.
 pub struct Related<T>(T);
+
+/// A marker to designate a field as being a one-to-one relationship.
+pub struct HasOne<T>(T);
 
 /// Generate record boilerplate for a model.
 ///
@@ -31,10 +35,17 @@ pub struct Related<T>(T);
 /// pub mod schema {
 ///     # use diesel::table;
 ///     table! {
+///         user_data (id) {
+///             id -> Integer,
+///             user_id -> Integer,
+///             avatar -> Nullable<Text>,
+///         }
+///     }
+///
+///     table! {
 ///         user (id) {
 ///             id -> Integer,
 ///             name -> Text,
-///             avatar -> Nullable<Text>,
 ///         }
 ///     }
 ///
@@ -63,8 +74,19 @@ pub struct Related<T>(T);
 ///     pub struct User {
 ///         id: i32,
 ///         name: String,
-///         avatar: Option<String>,
+///         data: HasOne<UserData>,
 ///         posts: Related<Vec<Post>>,
+///     }
+/// }
+///
+/// lowboy_record! {
+///     #[derive(Debug, Default, Queryable, Identifiable, Associations)]
+///     #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
+///     #[diesel(table_name = crate::schema::user_data)]
+///     pub struct UserData {
+///         id: i32,
+///         user_id: i32,
+///         avatar: Option<String>,
 ///     }
 /// }
 ///
@@ -147,6 +169,18 @@ macro_rules! internal_record {
         }
 
         internal_new_record!($pub $model ($($field : $type ,)*));
+    };
+
+    // Strip out HasOne fields. These fields are "virtual" and used for one-to-one relations.
+    (@record
+        ($pub:vis $field:ident : HasOne<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [$($from:tt)*]
+        [$($from_related:tt)*]
+    ) => {
+        paste! {
+            internal_record!(@record ($($($rest)*)?) -> { $($output)* } [$($from)*] [$($from_related)*]);
+        }
     };
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
@@ -343,6 +377,14 @@ macro_rules! internal_model {
         }
     };
 
+    // Strip out HasOne marker.
+    (@model
+        ($pub:vis $field:ident : HasOne<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+    ) => {
+        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($pub $field : $type) });
+    };
+
     // Strip out relation marker.
     (@model
         ($pub:vis $field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
@@ -377,6 +419,7 @@ macro_rules! internal_impl {
         -> { $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
         [ $(($key:ident ; $foreign_vis:vis $foreign_key:ident : $foreign_model:ty))* ]
         [ $(($many:ident : $many_vis:vis $many_model:ty))* ]
+        [ $(( $has_one_vis:vis $has_one:ident : $has_one_model:ty))* ]
     ) => {
         // impl Model
         impl $model {
@@ -392,12 +435,20 @@ macro_rules! internal_impl {
                             .await?;
                         let $key = $foreign_model::from_record(&$key, conn).await?;
                     )*
+                    $(
+                        let $has_one: [<$has_one_model Record>] = crate::schema::[<$has_one_model:snake>]::table
+                            .filter(crate::schema::[<$has_one_model:snake>]::[<$model:snake _id>].eq(record.id))
+                            .first(conn)
+                            .await?;
+                        let $has_one = $has_one_model::from_record(&$has_one, conn).await?;
+                    )*
 
                     Ok($model {
                         $($key ,)*
                         $(
                             $field : record.$field.clone(),
                         )*
+                        $($has_one ,)*
                         $($many : Vec::new() ,)*
                     })
                 }
@@ -449,9 +500,23 @@ macro_rules! internal_impl {
         -> { $($output:tt)* }
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
+        [ $($has_one:tt)* ]
     ) => {
         paste! {
-            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($pub $field : $type) ]);
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($pub $field : $type) ] [ $($has_one)* ]);
+        }
+    };
+
+    // Put HasOne relation fields in a separate has-one accumulator.
+    (@impl
+        ($pub:vis $field:ident : HasOne<$type:ty> $(, $($rest:tt)*)?)
+        -> { $($output:tt)* }
+        [ $($relations:tt)* ]
+        [ $($many:tt)* ]
+        [ $($has_one:tt)* ]
+    ) => {
+        paste! {
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ] [ $($has_one)* ( $pub $field : $type) ]);
         }
     };
 
@@ -461,9 +526,10 @@ macro_rules! internal_impl {
         -> { $($output:tt)* }
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
+        [ $($has_one:tt)* ]
     ) => {
         paste! {
-            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($pub $field ; [<$field _id>] : $type) ] [ $($many)* ]);
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; $pub [<$field _id>] : $type) ] [ $($many)* ] [ $($has_one)* ]);
         }
     };
 
@@ -477,12 +543,14 @@ macro_rules! internal_impl {
         [ $($relations:tt)* ]
         // Accumulator of model child collections.
         [ $($many:tt)* ]
+        // Accumulator of model has-one children.
+        [ $($has_one:tt)* ]
     ) => {
-        internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($pub $field : $type) } [ $($relations)* ] [ $($many)* ]);
+        internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($pub $field : $type) } [ $($relations)* ] [ $($many)* ] [ $($has_one)* ]);
     };
 
     // Entrypoint.
     ($model:ident ($($rest:tt)*)) => {
-        internal_impl!(@impl ($($rest)*) -> { $model } [] []);
+        internal_impl!(@impl ($($rest)*) -> { $model } [] [] []);
     };
 }
