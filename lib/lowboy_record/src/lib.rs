@@ -240,7 +240,7 @@ macro_rules! internal_new_record {
     ) => {
         paste! {
             // NewModelRecord
-            #[derive(Clone, Debug, Default, diesel::Insertable)]
+            #[derive(Clone, Debug, Default, diesel::Insertable, diesel::AsChangeset)]
             #[diesel(table_name = crate::schema::[<$model:snake>])]
             #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
             $pub struct [<New $model Record>]<'a> {
