@@ -18,6 +18,7 @@ use axum_login::{
     AuthManagerLayerBuilder, AuthnBackend,
 };
 use axum_messages::MessagesManagerLayer;
+use base64::prelude::*;
 use diesel::sqlite::SqliteConnection;
 use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -36,8 +37,12 @@ use std::time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tokio_cron_scheduler::JobScheduler;
 use tower_http::services::ServeDir;
-use tower_sessions::cookie::{self, Key};
-use tracing::info;
+use tower_livereload::LiveReloadLayer;
+use tower_sessions::{
+    cookie::{self, Key},
+    session,
+};
+use tracing::{info, warn};
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 
@@ -99,14 +104,19 @@ impl App {
                 .clone()
                 .continuously_delete_expired(Duration::from_secs(60)),
         );
-
-        // @TODO
-        let key = Key::generate();
+        let session_key = std::env::var("SESSION_KEY").ok();
+        let session_key = if let Some(session_key) = session_key {
+            let session_key = BASE64_STANDARD.decode(session_key)?;
+            Key::from(session_key.as_slice())
+        } else {
+            warn!("Could not get SESSION_KEY from environment. Falling back to generated key. This will invalidate any sessions when the server is stopped.");
+            Key::generate()
+        };
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false) // @TODO
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
-            .with_signed(key);
+            .with_signed(session_key);
 
         let auth_layer = AuthManagerLayerBuilder::new(self.clone(), session_layer).build();
 
@@ -126,6 +136,7 @@ impl App {
             .route("/logout", get(controller::auth::logout))
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
+            .layer(LiveReloadLayer::new())
             .with_state(self);
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;

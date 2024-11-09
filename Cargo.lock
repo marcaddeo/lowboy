@@ -1356,6 +1356,7 @@ dependencies = [
  "axum-extra",
  "axum-login",
  "axum-messages",
+ "base64 0.22.1",
  "chrono",
  "deadpool",
  "deadpool-diesel",
@@ -1379,6 +1380,7 @@ dependencies = [
  "tokio-cron-scheduler",
  "tower 0.5.1",
  "tower-http",
+ "tower-livereload",
  "tower-sessions",
  "tower-sessions-core",
  "tracing",
@@ -2677,6 +2679,20 @@ name = "tower-layer"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e"
+
+[[package]]
+name = "tower-livereload"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0eed2e2234e1daf043b5548205c29778f2655a00eba8fd980333506bb007f052"
+dependencies = [
+ "bytes",
+ "http 1.1.0",
+ "http-body 1.0.1",
+ "pin-project-lite",
+ "tokio",
+ "tower 0.5.1",
+]
 
 [[package]]
 name = "tower-service"
