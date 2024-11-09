@@ -53,19 +53,19 @@ fn lowboy_record_works() {
     #[diesel(table_name = crate::schema::user_data)]
     #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
     pub struct UserData {
-        id: i32,
-        user_id: i32,
-        avatar: Option<String>,
+        pub id: i32,
+        pub user_id: i32,
+        pub avatar: Option<String>,
     }
 
     #[apply(lowboy_record!)]
     #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable)]
     #[diesel(table_name = crate::schema::user)]
     pub struct User {
-        id: i32,
-        name: String,
-        data: HasOne<UserData>,
-        posts: Related<Vec<Post>>,
+        pub id: i32,
+        pub name: String,
+        pub data: HasOne<UserData>,
+        pub posts: Related<Vec<Post>>,
     }
 
     #[apply(lowboy_record!)]
@@ -73,9 +73,9 @@ fn lowboy_record_works() {
     #[diesel(table_name = crate::schema::post)]
     #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
     pub struct Post {
-        id: i32,
-        user: Related<User>,
-        content: String,
+        pub id: i32,
+        pub user: Related<User>,
+        pub content: String,
     }
 
     #[apply(lowboy_record!)]
@@ -84,10 +84,10 @@ fn lowboy_record_works() {
     #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
     #[diesel(belongs_to(PostRecord, foreign_key = post_id))]
     pub struct Comment {
-        id: i32,
-        user: Related<User>,
-        post: Related<Post>,
-        content: String,
+        pub id: i32,
+        pub user: Related<User>,
+        pub post: Related<Post>,
+        pub content: String,
     }
 
     let record = Post::new_record(123, "some content");
