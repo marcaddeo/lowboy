@@ -1368,6 +1368,7 @@ dependencies = [
  "fake",
  "flume",
  "futures",
+ "lowboy_record",
  "oauth2",
  "password-auth",
  "reqwest 0.12.9",
