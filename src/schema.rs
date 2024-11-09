@@ -9,22 +9,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    tower_session (id) {
-        id -> Text,
-        data -> Binary,
-        expiry_date -> Integer,
-    }
-}
-
-diesel::table! {
-    tower_sessions (id) {
-        id -> Text,
-        data -> Binary,
-        expiry_date -> Integer,
-    }
-}
-
-diesel::table! {
     user (id) {
         id -> Integer,
         username -> Text,
@@ -46,8 +30,6 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     post,
-    tower_session,
-    tower_sessions,
     user,
     user_data,
 );

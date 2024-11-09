@@ -1,3 +1,7 @@
+use ::tower_sessions::{
+    session::{Id, Record},
+    session_store, ExpiredDeletion, SessionStore,
+};
 use async_trait::async_trait;
 use diesel::prelude::*;
 use diesel::{
@@ -7,10 +11,6 @@ use diesel::{
 use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::RunQueryDsl;
-use tower_sessions::{
-    session::{Id, Record},
-    session_store, ExpiredDeletion, SessionStore,
-};
 
 /// An error type for SQLx stores.
 #[derive(thiserror::Error, Debug)]
@@ -51,7 +51,7 @@ impl From<DieselStoreError> for session_store::Error {
 }
 
 table! {
-    tower_session (id) {
+    tower_sessions (id) {
         id -> Text,
         data -> Binary,
         expiry_date -> BigInt,
@@ -59,7 +59,7 @@ table! {
 }
 
 #[derive(QueryableByName, Queryable, Insertable, Selectable, PartialEq, Debug)]
-#[diesel(table_name = tower_session)]
+#[diesel(table_name = tower_sessions)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 struct TowerSession {
     id: String,
@@ -93,7 +93,7 @@ impl DieselSqliteSessionStore {
     /// Migrate the session schema.
     pub async fn migrate(&self) -> session_store::Result<()> {
         let query = r#"
-            create table if not exists tower_session
+            create table if not exists tower_sessions
             (
                 id text primary key not null,
                 data blob not null,
@@ -123,8 +123,8 @@ impl ExpiredDeletion for DieselSqliteSessionStore {
             .get()
             .await
             .map_err(DieselStoreError::PoolError)?;
-        diesel::delete(tower_session::table)
-            .filter(tower_session::expiry_date.lt(chrono::Utc::now().timestamp()))
+        diesel::delete(tower_sessions::table)
+            .filter(tower_sessions::expiry_date.lt(chrono::Utc::now().timestamp()))
             .execute(&mut conn)
             .await
             .map_err(DieselStoreError::Diesel)?;
@@ -144,7 +144,7 @@ impl SessionStore for DieselSqliteSessionStore {
                 data: rmp_serde::to_vec(&record).unwrap(),
                 expiry_date: record.expiry_date.unix_timestamp(),
             };
-            let res = diesel::insert_into(tower_session::table)
+            let res = diesel::insert_into(tower_sessions::table)
                 .values(&new_session)
                 .execute(conn)
                 .await;
@@ -186,11 +186,11 @@ impl SessionStore for DieselSqliteSessionStore {
                 data: rmp_serde::to_vec(&record).unwrap(),
                 expiry_date: record.expiry_date.unix_timestamp(),
             };
-            diesel::insert_into(tower_session::table)
+            diesel::insert_into(tower_sessions::table)
                 .values(&new_session)
-                .on_conflict(tower_session::id)
+                .on_conflict(tower_sessions::id)
                 .do_update()
-                .set(tower_session::expiry_date.eq(new_session.expiry_date))
+                .set(tower_sessions::expiry_date.eq(new_session.expiry_date))
                 .execute(conn)
                 .await
                 .map_err(DieselStoreError::Diesel)?;
@@ -215,9 +215,9 @@ impl SessionStore for DieselSqliteSessionStore {
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        let session = tower_session::dsl::tower_session
-            .filter(tower_session::id.eq(session_id.to_string()))
-            .filter(tower_session::expiry_date.gt(chrono::Utc::now().timestamp()))
+        let session = tower_sessions::dsl::tower_sessions
+            .filter(tower_sessions::id.eq(session_id.to_string()))
+            .filter(tower_sessions::expiry_date.gt(chrono::Utc::now().timestamp()))
             .get_result::<TowerSession>(&mut conn)
             .await;
 
@@ -237,8 +237,8 @@ impl SessionStore for DieselSqliteSessionStore {
             .await
             .map_err(DieselStoreError::PoolError)?;
 
-        diesel::delete(tower_session::table)
-            .filter(tower_session::id.eq(session_id.to_string()))
+        diesel::delete(tower_sessions::table)
+            .filter(tower_sessions::id.eq(session_id.to_string()))
             .execute(&mut conn)
             .await
             .map_err(DieselStoreError::Diesel)?;
