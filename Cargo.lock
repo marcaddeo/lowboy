@@ -1359,7 +1359,6 @@ dependencies = [
  "chrono",
  "deadpool",
  "deadpool-diesel",
- "defile",
  "derive-masked",
  "derive_builder",
  "derive_more",
@@ -1371,7 +1370,6 @@ dependencies = [
  "futures",
  "oauth2",
  "password-auth",
- "paste",
  "reqwest 0.12.9",
  "rmp-serde",
  "serde",
@@ -1386,6 +1384,16 @@ dependencies = [
  "tracing-subscriber",
  "vergen-gitcl",
  "xdg",
+]
+
+[[package]]
+name = "lowboy_record"
+version = "0.1.0"
+dependencies = [
+ "defile",
+ "diesel",
+ "diesel-async",
+ "paste",
 ]
 
 [[package]]
