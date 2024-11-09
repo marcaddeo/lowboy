@@ -8,6 +8,8 @@ mod model;
 mod schema;
 mod view;
 
+// Load .env file into the environment for debug builds.
+#[cfg_attr(debug_assertions, dotenvy::load)]
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
