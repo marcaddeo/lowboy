@@ -1,40 +1,49 @@
-use crate::{controller, model, view};
+use crate::{
+    controller,
+    diesel_sqlite_session_store::DieselSqliteSessionStore,
+    model::{self, NewUserRecord, User, UserRecord},
+};
 use anyhow::Result;
-use askama::Template as _;
 use async_trait::async_trait;
 use axum::{
+    extract::{FromRef, FromRequestParts},
+    http::{request::Parts, StatusCode},
     response::sse::Event,
     routing::{get, post},
     Router,
 };
 use axum_login::{
     login_required,
-    tower_sessions::{ExpiredDeletion as _, Expiry, SessionManagerLayer},
+    tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
     AuthManagerLayerBuilder, AuthnBackend,
 };
 use axum_messages::MessagesManagerLayer;
+use diesel::sqlite::SqliteConnection;
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use flume::{Receiver, Sender};
 use oauth2::{
     basic::{BasicClient, BasicRequestTokenError},
     http::header::{AUTHORIZATION, USER_AGENT},
     reqwest::{async_http_client, AsyncHttpClientError},
     url::Url,
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, TokenResponse as _, TokenUrl,
+    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, TokenResponse, TokenUrl,
 };
 use password_auth::verify_password;
 use serde::Deserialize;
-use sqlx::{sqlite::SqlitePoolOptions, SqlitePool};
 use std::time::Duration;
 use tokio::{signal, task::AbortHandle};
 use tokio_cron_scheduler::JobScheduler;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
-use tower_sessions_sqlx_store::SqliteStore;
-use tracing::{info, warn};
+use tracing::info;
+
+pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 
 #[derive(Clone)]
 pub struct App {
-    pub database: SqlitePool,
+    pub database: Pool<SyncConnectionWrapper<SqliteConnection>>,
     pub events: (Sender<Event>, Receiver<Event>),
     pub scheduler: JobScheduler,
     pub oauth: BasicClient,
@@ -45,11 +54,11 @@ impl App {
         let database =
             xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
-        let database = SqlitePoolOptions::new()
-            .max_connections(3)
-            .connect(database.to_str().expect("database path should be valid"))
-            .await
-            .unwrap();
+        let config = AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new(
+            database.to_str().expect("database path should be valid"),
+        );
+
+        let database = Pool::builder(config).build().unwrap();
 
         let (tx, rx) = flume::bounded::<Event>(32);
 
@@ -82,7 +91,7 @@ impl App {
     }
 
     pub async fn serve(self) -> Result<()> {
-        let session_store = SqliteStore::new(self.database.clone());
+        let session_store = DieselSqliteSessionStore::new(self.database.clone());
         session_store.migrate().await?;
 
         let deletion_task = tokio::task::spawn(
@@ -155,47 +164,44 @@ impl App {
         self.oauth.authorize_url(CsrfToken::new_random).url()
     }
 
-    #[allow(dead_code)]
-    async fn generate_posts(&self) {
-        let app = self.clone();
-        self.scheduler
-            .add(
-                tokio_cron_scheduler::Job::new_async("every 30 seconds", move |_, _| {
-                    let ctx = app.clone();
-                    Box::pin(async move {
-                        let mut post = model::Post::fake();
-                        let user = model::User::insert(&post.author, &ctx.database)
-                            .await
-                            .expect("inserting user should work");
-                        post.author = user;
-                        let post = model::Post::insert(post, &ctx.database)
-                            .await
-                            .expect("inserting post should work");
-
-                        let (tx, _) = ctx.events;
-                        tx.send(
-                            Event::default()
-                                .event("NewPost")
-                                .data(view::Post { post: post.clone() }.render().unwrap()),
-                        )
-                        .unwrap();
-
-                        info!("Added new post by: {}", post.author.data.name);
-                    })
-                })
-                .expect("job creation should succeed"),
-            )
-            .await
-            .expect("scheduler should allow adding job");
-    }
+    // #[allow(dead_code)]
+    // async fn generate_posts(&self) {
+    //     let app = self.clone();
+    //     self.scheduler
+    //         .add(
+    //             tokio_cron_scheduler::Job::new_async("every 30 seconds", move |_, _| {
+    //                 let ctx = app.clone();
+    //                 Box::pin(async move {
+    //                     let mut post = model::Post::fake();
+    //                     let user = User::insert(&post.author, &ctx.database)
+    //                         .await
+    //                         .expect("inserting user should work");
+    //                     post.author = user;
+    //                     let post = model::Post::insert(post, &ctx.database)
+    //                         .await
+    //                         .expect("inserting post should work");
+    //
+    //                     let (tx, _) = ctx.events;
+    //                     tx.send(
+    //                         Event::default()
+    //                             .event("NewPost")
+    //                             .data(view::Post { post: post.clone() }.render().unwrap()),
+    //                     )
+    //                     .unwrap();
+    //
+    //                     info!("Added new post by: {}", post.author.data.name);
+    //                 })
+    //             })
+    //             .expect("job creation should succeed"),
+    //         )
+    //         .await
+    //         .expect("scheduler should allow adding job");
+    // }
 }
 
 // @TODO
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error(transparent)]
-    Sqlx(#[from] sqlx::Error),
-
     #[error(transparent)]
     Reqwest(reqwest::Error),
 
@@ -204,6 +210,12 @@ pub enum Error {
 
     #[error(transparent)]
     TaskJoin(#[from] tokio::task::JoinError),
+
+    #[error(transparent)]
+    Deadpool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
+
+    #[error(transparent)]
+    Diesel(#[from] diesel::result::Error),
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,7 +228,7 @@ pub struct GitHubUserInfo {
 
 #[async_trait]
 impl AuthnBackend for App {
-    type User = model::User;
+    type User = UserRecord;
     type Credentials = model::Credentials;
     type Error = Error;
 
@@ -226,25 +238,15 @@ impl AuthnBackend for App {
     ) -> Result<Option<Self::User>, Self::Error> {
         use model::CredentialKind;
 
+        let mut conn = self.database.get().await?;
+
         match credentials.kind {
             CredentialKind::Password => {
                 let credentials = credentials
                     .password
                     .expect("CredentialKind::Password password field should not be none");
-                let user = model::User::find_by_username_with_password(
-                    &credentials.username,
-                    &self.database,
-                )
-                .await
-                .ok();
-
-                let Some(user) = user else {
-                    return Ok(None);
-                };
-
-                if user.password.is_none() {
-                    return Ok(None);
-                }
+                let user = User::find_by_username_having_password(&credentials.username, &mut conn)
+                    .await?;
 
                 tokio::task::spawn_blocking(|| {
                     Ok(verify_password(
@@ -252,7 +254,7 @@ impl AuthnBackend for App {
                         user.password.as_ref().expect("checked is_none"),
                     )
                     .is_ok()
-                    .then_some(user))
+                    .then_some(user.into()))
                 })
                 .await?
             }
@@ -289,15 +291,23 @@ impl AuthnBackend for App {
                     .map_err(Self::Error::Reqwest)?;
 
                 // Persist user in our database so we can use `get_user`.
+                let access_token = token_res.access_token().secret();
+                let new_user = NewUserRecord {
+                    username: &user_info.login,
+                    email: &user_info.email,
+                    password: None,
+                    access_token: Some(access_token),
+                };
+                let record = new_user
+                    .create_or_update(
+                        &user_info.name,
+                        None,
+                        Some(&user_info.avatar_url),
+                        &mut conn,
+                    )
+                    .await?;
 
-                let mut user = model::User::from(user_info);
-                user.access_token = Some(token_res.access_token().secret().to_string());
-                let user = model::User::insert(&user, &self.database)
-                    .await
-                    .map_err(|e| warn!("{}", e))
-                    .expect("shrug");
-
-                Ok(Some(user))
+                Ok(Some(record))
             }
         }
     }
@@ -306,8 +316,38 @@ impl AuthnBackend for App {
         &self,
         user_id: &axum_login::UserId<Self>,
     ) -> Result<Option<Self::User>, Self::Error> {
-        Ok(model::User::find_by_id(*user_id, &self.database).await.ok())
+        let mut conn = self.database.get().await?;
+        Ok(Some(User::find(*user_id, &mut conn).await?.into()))
     }
 }
 
 pub type AuthSession = axum_login::AuthSession<App>;
+
+pub struct DatabaseConnection(
+    pub  deadpool::managed::Object<
+        AsyncDieselConnectionManager<SyncConnectionWrapper<diesel::SqliteConnection>>,
+    >,
+);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for DatabaseConnection
+where
+    S: Send + Sync,
+    App: FromRef<S>,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let app = App::from_ref(state);
+        let conn = app.database.get().await.map_err(internal_error)?;
+
+        Ok(Self(conn))
+    }
+}
+
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}

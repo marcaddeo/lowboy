@@ -1,15 +1,16 @@
 use crate::{
-    app::{App, AuthSession},
-    model, view,
+    app::{AuthSession, DatabaseConnection},
+    model::{Post, User},
+    view,
 };
-use axum::extract::State;
 
 pub async fn home(
     auth_session: AuthSession,
-    State(App { database, .. }): State<App>,
+    DatabaseConnection(mut conn): DatabaseConnection,
 ) -> view::Home {
-    let user = auth_session.user.expect("user should be logged in");
-    let posts = model::Post::find(5, &database).await.unwrap_or_default();
+    let record = auth_session.user.expect("user should be logged in");
+    let user = User::from_record(&record, &mut conn).await.unwrap();
+    let posts = Post::list(&mut conn, Some(5)).await.unwrap();
 
     let version_string = env!("VERGEN_GIT_SHA").to_string();
     view::Home {

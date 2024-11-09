@@ -3,7 +3,9 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
 mod controller;
+mod diesel_sqlite_session_store;
 mod model;
+mod schema;
 mod view;
 
 #[tokio::main]
