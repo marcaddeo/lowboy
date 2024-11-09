@@ -118,7 +118,7 @@ macro_rules! internal_record {
     // Done, generate struct.
     (@record
         ()
-        -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field:ident : $type:ty))* }
+        -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
         [$(($from:ident : $from_type:ty))*]
         [$(($from_related: ident: $from_related_model:ty))*]
     ) => {
@@ -127,7 +127,7 @@ macro_rules! internal_record {
             $(#[$attr])*
             #[doc = "A `" $model "` record"]
             $pub struct [<$model Record>] {
-                $($field : $type ,)*
+                $($field_vis $field : $type ,)*
             }
 
             // impl From<Model> for <ModelRecord>
@@ -151,7 +151,7 @@ macro_rules! internal_record {
 
     // Strip out vec relation fields. These fields are "virtual" and used for one-to-many relations.
     (@record
-        ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [$($from:tt)*]
         [$($from_related:tt)*]
@@ -163,13 +163,13 @@ macro_rules! internal_record {
 
     // Replace relation fields with foreign key.
     (@record
-        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [$($from:tt)*]
         [$($from_related:tt)*]
     ) => {
         paste! {
-            internal_record!(@record ($($($rest)*)?) -> { $($output)* ([<$field _id>] : i32) } [$($from)*] [$($from_related)* ([<$field _id>] : $type)]);
+            internal_record!(@record ($($($rest)*)?) -> { $($output)* ($pub [<$field _id>] : i32) } [$($from)*] [$($from_related)* ([<$field _id>] : $type)]);
         }
     };
 
@@ -177,7 +177,7 @@ macro_rules! internal_record {
     (@record
         // Remove the first field/type from the list of Model fields to process into ModelRecord
         // fields.
-        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : $type:ty $(, $($rest:tt)*)?)
         // Accumulator of ModelRecord output (attrs, visibility, model name, (record fields)).
         -> { $($output:tt)* }
         // Accumulator of non-related fields to copy 1-to-1 from Model to ModelRecord.
@@ -185,7 +185,7 @@ macro_rules! internal_record {
         // Accumulator of related fields to copy ids from related Model to ModelRecord.
         [$($from_related:tt)*]
     ) => {
-        internal_record!(@record ($($($rest)*)?) -> { $($output)* ($field : $type) } [$($from)* ($field : $type)] [$($from_related)*]);
+        internal_record!(@record ($($($rest)*)?) -> { $($output)* ($pub $field : $type) } [$($from)* ($field : $type)] [$($from_related)*]);
     };
 
     // Entrypoint.
@@ -201,8 +201,8 @@ macro_rules! internal_new_record {
     // Done, generate struct and generate new_record associated function for model.
     (@new_record
         ()
-        -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
-        [ $(($option:ident : $option_type:ty))* ]
+        -> { $pub:vis $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
+        [ $(($option_vis:vis $option:ident : $option_type:ty))* ]
     ) => {
         paste! {
             // NewModelRecord
@@ -210,8 +210,8 @@ macro_rules! internal_new_record {
             #[diesel(table_name = crate::schema::[<$model:lower>])]
             #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
             $pub struct [<New $model Record>]<'a> {
-                $($field : $type ,)*
-                $($option : $option_type ,)*
+                $($field_vis $field : $type ,)*
+                $($option_vis $option : $option_type ,)*
             }
 
             // impl NewModelRecord
@@ -262,34 +262,34 @@ macro_rules! internal_new_record {
 
     // Convert Option<String> fields to Option<&'a str>, and put them in the optionial accumulator.
     (@new_record
-        ($field:ident : Option<String> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Option<String> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
         defile! {
-            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<&'a str>) ]);
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($pub $field : Option<&'a str>) ]);
         }
     };
 
     // Put optional fields in a separate optional accumulator.
     (@new_record
-        ($field:ident : Option<$type:ty> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Option<$type:ty> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
         defile! {
-            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($field : Option<$type>) ]);
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* } [ $($optional)* ($pub $field : Option<$type>) ]);
         }
     };
 
     // Convert String fields to &'a str.
     (@new_record
-        ($field:ident : String $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : String $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($optional:tt)* ]
     ) => {
         defile! {
-            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : &'a str) } [ $($optional)* ]);
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($pub $field : &'a str) } [ $($optional)* ]);
         }
     };
 
@@ -308,14 +308,14 @@ macro_rules! internal_new_record {
     (@new_record
         // Remove the first field/type from the list of Model fields to process into NewModelRecord
         // fields.
-        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : $type:ty $(, $($rest:tt)*)?)
         // Accumulator of NewModelRecord output (attrs, visibility, model name, (record fields)).
         -> { $($output:tt)* }
         // Accumulator of optional NewModelRecord fields.
         [ $($optional:tt)* ]
     ) => {
         defile! {
-            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($field : $type) } [ $($optional)* ]);
+            internal_new_record!(@@new_record ($($(@$rest)*)?) -> { $($output)* ($pub $field : $type) } [ $($optional)* ]);
         }
     };
 
@@ -331,34 +331,34 @@ macro_rules! internal_model {
     // Done, generate struct.
     (@model
         ()
-        -> { $pub:vis $model:ident $(($field:ident : $type:ty))* }
+        -> { $pub:vis $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
     ) => {
         paste! {
             // Model
             #[derive(Debug, Clone)]
             #[doc = "A `" $model "` model"]
             $pub struct $model {
-                $($field : $type ,)*
+                $($field_vis $field : $type ,)*
             }
         }
     };
 
     // Strip out relation marker.
     (@model
-        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
     ) => {
-        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($pub $field : $type) });
     };
 
     // Iterate over struct fields.
     (@model
         // Remove the first field/type from the list of Model fields to process into Model fields.
-        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : $type:ty $(, $($rest:tt)*)?)
         // Accumulator of Model output (attrs, visibility, model name, (model fields)).
         -> { $($output:tt)* }
     ) => {
-        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($field : $type) });
+        internal_model!(@model ($($($rest)*)?) -> { $($output)* ($pub $field : $type) });
     };
 
     // Entrypoint.
@@ -374,9 +374,9 @@ macro_rules! internal_impl {
     // Done, generate Model impl.
     (@impl
         ()
-        -> { $model:ident $(($field:ident : $type:ty))* }
-        [ $(($key:ident ; $foreign_key:ident : $foreign_model:ty))* ]
-        [ $(($many:ident : $many_model:ty))* ]
+        -> { $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
+        [ $(($key:ident ; $foreign_vis:vis $foreign_key:ident : $foreign_model:ty))* ]
+        [ $(($many:ident : $many_vis:vis $many_model:ty))* ]
     ) => {
         // impl Model
         impl $model {
@@ -445,32 +445,32 @@ macro_rules! internal_impl {
 
     // Put vec relation fields in a separate one-to-many accumulator.
     (@impl
-        ($field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Related<Vec<$type:ty>> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
     ) => {
         paste! {
-            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($field : $type) ]);
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ] [ $($many)* ($pub $field : $type) ]);
         }
     };
 
     // Put relation fields in a separate accumulator.
     (@impl
-        ($field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : Related<$type:ty> $(, $($rest:tt)*)?)
         -> { $($output:tt)* }
         [ $($relations:tt)* ]
         [ $($many:tt)* ]
     ) => {
         paste! {
-            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($field ; [<$field _id>] : $type) ] [ $($many)* ]);
+            internal_impl!(@impl ($($($rest)*)?) -> { $($output)* } [ $($relations)* ($pub $field ; [<$field _id>] : $type) ] [ $($many)* ]);
         }
     };
 
     // Iterate over struct fields.
     (@impl
         // Remove the first field/type from the list of Model fields to process into Model fields.
-        ($field:ident : $type:ty $(, $($rest:tt)*)?)
+        ($pub:vis $field:ident : $type:ty $(, $($rest:tt)*)?)
         // Accumulator of Impl output (model name, (model fields)).
         -> { $($output:tt)* }
         // Accumulator of model children.
@@ -478,7 +478,7 @@ macro_rules! internal_impl {
         // Accumulator of model child collections.
         [ $($many:tt)* ]
     ) => {
-        internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($field : $type) } [ $($relations)* ] [ $($many)* ]);
+        internal_impl!(@impl ($($($rest)*)?) -> { $($output)* ($pub $field : $type) } [ $($relations)* ] [ $($many)* ]);
     };
 
     // Entrypoint.
