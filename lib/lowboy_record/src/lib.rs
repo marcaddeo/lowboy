@@ -135,7 +135,7 @@ macro_rules! internal_record {
             impl From<$model> for [<$model Record>] {
                 fn from(value: $model) -> Self {
                 $(
-                    let $from_related = value.[<$from_related_model:lower>].id;
+                    let $from_related = value.[<$from_related_model:snake>].id;
                 )*
 
                     Self {
@@ -207,7 +207,7 @@ macro_rules! internal_new_record {
         paste! {
             // NewModelRecord
             #[derive(Clone, Debug, Default, diesel::Insertable)]
-            #[diesel(table_name = crate::schema::[<$model:lower>])]
+            #[diesel(table_name = crate::schema::[<$model:snake>])]
             #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
             $pub struct [<New $model Record>]<'a> {
                 $($field_vis $field : $type ,)*
@@ -237,11 +237,11 @@ macro_rules! internal_new_record {
             )*
 
                 // NewModelRecord::create
-                #[doc = "Create a new `" [<$model:lower>] "` in the database"]
+                #[doc = "Create a new `" [<$model:snake>] "` in the database"]
                 pub async fn create(&self, conn: &mut Connection) -> QueryResult<[<$model Record>]> {
-                    diesel::insert_into(crate::schema::[<$model:lower>]::table)
+                    diesel::insert_into(crate::schema::[<$model:snake>]::table)
                         .values(self)
-                        .returning(crate::schema::[<$model:lower>]::table::all_columns())
+                        .returning(crate::schema::[<$model:snake>]::table::all_columns())
                         .get_result(conn)
                         .await
                 }
@@ -386,7 +386,7 @@ macro_rules! internal_impl {
                 #[doc = "This will also load child models, excluding one-to-many children."]
                 pub async fn from_record(record: &[<$model Record>], conn: &mut Connection) -> QueryResult<Self> {
                     $(
-                        let $key: [<$foreign_model Record>] = crate::schema::[<$foreign_model:lower>]::table
+                        let $key: [<$foreign_model Record>] = crate::schema::[<$foreign_model:snake>]::table
                             .find(record.$foreign_key)
                             .first(conn)
                             .await?;
@@ -423,7 +423,7 @@ macro_rules! internal_impl {
                 pub async fn [<with_ $many>](self, conn: &mut Connection) -> QueryResult<Self> {
                     let record: [<$model Record>] = self.clone().into();
                     let records: Vec<[<$many_model Record>]> = [<$many_model Record>]::belonging_to(&record)
-                        .select(crate::schema::[<$many_model:lower>]::table::all_columns())
+                        .select(crate::schema::[<$many_model:snake>]::table::all_columns())
                         .load(conn)
                         .await?;
 
