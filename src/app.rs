@@ -127,7 +127,8 @@ impl App {
             // Static assets.
             .nest_service("/static", ServeDir::new("static"))
             // Auth routes.
-            .route("/register", get(controller::auth::register))
+            .route("/register", get(controller::auth::register_form))
+            .route("/register", post(controller::auth::register))
             .route("/login", get(controller::auth::form))
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
