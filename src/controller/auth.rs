@@ -1,6 +1,6 @@
 use crate::{
-    app::AuthSession,
-    model::{CredentialKind, Credentials, OAuthCredentials},
+    app::{AuthSession, DatabaseConnection},
+    model::{CredentialKind, Credentials, OAuthCredentials, User},
     view,
 };
 use axum::{
@@ -10,13 +10,17 @@ use axum::{
     Form,
 };
 use axum_messages::Messages;
+use derive_masked::{DebugMasked, DisplayMasked};
+use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use oauth2::CsrfToken;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 use tracing::warn;
+use validator::Validate;
 
-pub const NEXT_URL_KEY: &str = "auth.next-url";
-pub const CSRF_STATE_KEY: &str = "oauth.csrf-state";
+const NEXT_URL_KEY: &str = "auth.next-url";
+const CSRF_STATE_KEY: &str = "oauth.csrf-state";
+const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
 
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
@@ -29,13 +33,110 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form(messages: Messages, Query(NextUrl { next }): Query<NextUrl>) -> view::Login {
+pub async fn form(
+    messages: Messages,
+    Query(NextUrl { next }): Query<NextUrl>,
+) -> impl IntoResponse {
     let version_string = env!("VERGEN_GIT_SHA").to_string();
     view::Login {
         messages: messages.into_iter().collect(),
         next,
         version_string,
     }
+}
+
+pub async fn register_form(
+    AuthSession { user, .. }: AuthSession,
+    session: Session,
+    messages: Messages,
+) -> impl IntoResponse {
+    if user.is_some() {
+        return Redirect::to("/").into_response();
+    }
+
+    let form: RegistrationData = session
+        .remove(REGISTRATION_FORM_KEY)
+        .await
+        .unwrap()
+        .unwrap_or_default();
+
+    let version_string = env!("VERGEN_GIT_SHA").to_string();
+    view::Register {
+        messages: messages.into_iter().collect(),
+        next: None,
+        version_string,
+        form,
+    }
+    .into_response()
+}
+
+// @TODO figure out how to put this validation just on the NewModelRecords
+#[derive(DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
+pub struct RegistrationData {
+    #[validate(length(min = 1))]
+    pub name: String,
+    #[validate(length(min = 1, max = 32))]
+    pub username: String,
+    #[validate(email)]
+    pub email: String,
+    #[validate(length(min = 8))]
+    password: String,
+}
+
+pub async fn register(
+    AuthSession { user, .. }: AuthSession,
+    session: Session,
+    mut messages: Messages,
+    DatabaseConnection(mut conn): DatabaseConnection,
+    Form(input): Form<RegistrationData>,
+) -> impl IntoResponse {
+    if user.is_some() {
+        return Redirect::to("/").into_response();
+    }
+
+    if let Err(validation) = input.validate() {
+        // @TODO just put these error messages in teh validation?
+        for (field, _) in validation.into_errors() {
+            let message = match field {
+                "name" => "Your name cannot be empty",
+                "username" => "Username must be between 1 and 32 characters",
+                "email" => "Email provided is not valid",
+                "password" => "Password must be at least 8 characters",
+                _ => "An unknown error occurred",
+            };
+            messages = messages.error(message);
+        }
+
+        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
+        return Redirect::to("/register").into_response();
+    };
+
+    let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
+    let avatar = format!(
+        "https://avatar.iran.liara.run/username?username={}+{}",
+        first_name, last_name
+    );
+    let password = password_auth::generate_hash(&input.password);
+    let new_user = User::new_record(&input.username, &input.email).with_password(Some(&password));
+    let user = new_user
+        .create_or_update(&input.name, None, Some(&avatar), &mut conn)
+        .await;
+
+    match user {
+        Ok(_) => messages.success("Registration successful! You can now log in."),
+        Err(DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
+            messages.error("A user with the same username or email already exists")
+        }
+        Err(_) => messages.error("An unknown error occurred"),
+    };
+
+    if user.is_err() {
+        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
+        Redirect::to("/register")
+    } else {
+        Redirect::to("/login")
+    }
+    .into_response()
 }
 
 pub async fn login(

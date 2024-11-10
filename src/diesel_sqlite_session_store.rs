@@ -190,7 +190,10 @@ impl SessionStore for DieselSqliteSessionStore {
                 .values(&new_session)
                 .on_conflict(tower_sessions::id)
                 .do_update()
-                .set(tower_sessions::expiry_date.eq(new_session.expiry_date))
+                .set((
+                    tower_sessions::expiry_date.eq(new_session.expiry_date),
+                    tower_sessions::data.eq(new_session.data.clone()),
+                ))
                 .execute(conn)
                 .await
                 .map_err(DieselStoreError::Diesel)?;
