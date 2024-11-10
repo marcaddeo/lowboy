@@ -110,12 +110,15 @@ pub async fn register(
         return Redirect::to("/register").into_response();
     };
 
-    // @TODO generate an avatar url.
-
+    let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
+    let avatar = format!(
+        "https://avatar.iran.liara.run/username?username={}+{}",
+        first_name, last_name
+    );
     let password = password_auth::generate_hash(&input.password);
     let new_user = User::new_record(&input.username, &input.email).with_password(Some(&password));
     let user = new_user
-        .create_or_update(&input.name, None, None, &mut conn)
+        .create_or_update(&input.name, None, Some(&avatar), &mut conn)
         .await;
 
     match user {
