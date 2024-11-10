@@ -14,7 +14,7 @@
     {% include "components/header.html" %}
   {% endblock %}
     <main class="mb-auto px-36">
-      {% block content %}{% endblock %}
+      {% block content %}{{ content|safe }}{% endblock %}
     </main>
     {% include "components/footer.html" %}
   </body>

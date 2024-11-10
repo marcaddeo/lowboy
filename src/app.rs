@@ -2,12 +2,14 @@ use crate::{
     controller,
     diesel_sqlite_session_store::DieselSqliteSessionStore,
     model::{self, NewUserRecord, User, UserRecord},
+    view,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use axum::{
     extract::{FromRef, FromRequestParts},
     http::{request::Parts, StatusCode},
+    middleware,
     response::sse::Event,
     routing::{get, post},
     Router,
@@ -133,6 +135,10 @@ impl App {
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
+            .layer(middleware::map_response_with_state(
+                self.clone(),
+                view::render_view,
+            ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
             .with_state(self);

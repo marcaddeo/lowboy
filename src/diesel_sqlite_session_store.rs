@@ -158,6 +158,7 @@ impl SessionStore for DieselSqliteSessionStore {
                         Err(DieselStoreError::Diesel(res.err().unwrap()).into())
                     }
                 }
+                // @TODO why is this commented out :x
                 // Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(false),
                 Err(e) => Err(DieselStoreError::Diesel(e).into()),
             }
