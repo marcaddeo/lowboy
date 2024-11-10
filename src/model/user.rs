@@ -69,17 +69,13 @@ impl<'a> NewUserRecord<'a> {
                     .set(user::access_token.eq(excluded(user::access_token)))
                     .get_result(conn)
                     .await?;
-                let data = NewUserDataRecord {
-                    user_id: user.id,
-                    name,
-                    byline,
-                    avatar,
-                };
+                let data = NewUserDataRecord::new(user.id, name)
+                    .with_avatar(avatar)
+                    .with_byline(byline);
                 insert_into(user_data::table)
                     .values(data.clone())
                     .on_conflict(user_data::user_id)
-                    .do_update()
-                    .set(&data)
+                    .do_nothing()
                     .execute(conn)
                     .await?;
 
