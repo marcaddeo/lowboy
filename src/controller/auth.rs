@@ -41,6 +41,15 @@ pub async fn form(
     }
 }
 
+pub async fn register(messages: Messages) -> impl IntoResponse {
+    let version_string = env!("VERGEN_GIT_SHA").to_string();
+    view::Register {
+        messages: messages.into_iter().collect(),
+        next: None,
+        version_string,
+    }
+}
+
 pub async fn login(
     mut auth_session: AuthSession,
     session: Session,

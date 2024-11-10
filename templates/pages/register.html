@@ -1,0 +1,77 @@
+{% import "components/alerts.html" as alerts %}
+{% extends "layout.html" %}
+
+{% block title %}Sign up for an account{% endblock %}
+{% block header %}{% endblock %}
+
+{% block content %}
+<section class="mt-36 mx-auto w-screen max-w-xl">
+  {% call alerts::alerts(messages) %}
+  <article class="flex rounded-md max-w-5xl mt-10 flex-col overflow-hidden border border-gray-500 bg-surface-alt dark:bg-surfaceDark-alt text-gray-800 dark:border-gray-500 dark:text-gray-300">
+    <div class="flex flex-col gap-4 p-6">
+      <h3 class="text-balance text-xl lg:text-2xl font-bold text-gray-950 dark:text-gray-100 text-center" aria-describedby="login-form">Sign up for an account</h3>
+      <form id="login-form" method="post">
+
+        <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
+          <label for="name" class="w-fit pl-0.5 text-sm">Your name</label>
+          <input id="name" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="name" placeholder="First and last name" value="" autocomplete="name" required />
+        </div>
+
+        <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
+          <label for="username" class="w-fit pl-0.5 text-sm">Username</label>
+          <input id="username" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="username" placeholder="Username" value="" autocomplete="username" required />
+        </div>
+
+        <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
+          <label for="email" class="w-fit pl-0.5 text-sm">Email</label>
+          <input id="email" type="email" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="email" placeholder="Email" value="" autocomplete="email" required />
+        </div>
+
+        <div class="flex w-full flex-col my-6 gap-1 text-gray-800 dark:text-gray-300">
+          <label for="passwordInput" class="w-fit pl-0.5 text-sm">Password</label>
+          <div x-data="{ showPassword: false }" class="relative">
+            <input :type="showPassword ? 'text' : 'password'" id="passwordInput" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400 dark:bg-gray-800/50" name="password" autocomplete="password" placeholder="Password" required />
+            <button type="button"  @click="showPassword = !showPassword" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-800 dark:text-gray-300" aria-label="Show password">
+              <svg x-show="!showPassword" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" class="size-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+              </svg>
+              <svg x-show="showPassword" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" class="size-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {# @TODO felt cute, might use later #}
+        {#
+        <div class="flex mt-8 w-full text-center flex-col gap-1">
+          <span class="w-fit pl-0.5 text-sm text-gray-800 dark:text-gray-300">Profile Picture</span>
+          <div class="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-gray-500 p-8 text-gray-800 dark:border-gray-500 dark:text-gray-300">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true" stroke="currentColor" class="w-12 h-12 opacity-75">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <div class="group">
+              <label for="fileInputDragDrop" class="cursor-pointer font-medium text-sky-900 group-focus-within:underline dark:text-sky-400">
+                <input id="fileInputDragDrop" type="file" class="sr-only" aria-describedby="validFileFormats" />
+                Browse
+              </label>
+              or drag and drop an image here
+            </div>
+            <small id="validFileFormats">PNG, JPG, WebP - Max 5MB</small>
+          </div>
+        </div>
+        #}
+
+        <div class="flex w-full mt-10 text-center flex-col gap-1">
+          <button type="submit" class="mt-4 cursor-pointer whitespace-nowrap bg-sky-900 w-full px-3 py-4 text-center text-sm font-medium tracking-wide text-white transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 active:opacity-100 active:outline-offset-0 dark:bg-sky-400 dark:text-black dark:focus-visible:outline-sky-400 rounded-md">Register</button>
+        </div>
+        {% if let Some(next) = next %}
+        <input type="hidden" name="next" value="{{ next }}" />
+        {% endif %}
+      </form>
+      <p class="w-full mt-4 text-sm text-center text-gray-500">Already have an account? <a href="/login" class="text-blue-500 underline">Sign in here</a></p>
+    </div>
+  </article>
+</section>
+{% endblock %}
