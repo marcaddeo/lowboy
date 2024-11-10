@@ -95,6 +95,7 @@ pub async fn register(
     }
 
     if let Err(validation) = input.validate() {
+        // @TODO just put these error messages in teh validation?
         for (field, _) in validation.into_errors() {
             let message = match field {
                 "name" => "Your name cannot be empty",
