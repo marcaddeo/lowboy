@@ -29,7 +29,10 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form(messages: Messages, Query(NextUrl { next }): Query<NextUrl>) -> view::Login {
+pub async fn form(
+    messages: Messages,
+    Query(NextUrl { next }): Query<NextUrl>,
+) -> impl IntoResponse {
     let version_string = env!("VERGEN_GIT_SHA").to_string();
     view::Login {
         messages: messages.into_iter().collect(),
