@@ -1,7 +1,7 @@
 use crate::{
     app::{AuthSession, DatabaseConnection},
     model::{CredentialKind, Credentials, OAuthCredentials, User},
-    view,
+    view::{self, View},
 };
 use axum::{
     extract::Query,
@@ -37,12 +37,10 @@ pub async fn form(
     messages: Messages,
     Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
-    let version_string = env!("VERGEN_GIT_SHA").to_string();
-    view::Login {
+    View(view::Login {
         messages: messages.into_iter().collect(),
         next,
-        version_string,
-    }
+    })
 }
 
 pub async fn register_form(
@@ -60,18 +58,16 @@ pub async fn register_form(
         .unwrap()
         .unwrap_or_default();
 
-    let version_string = env!("VERGEN_GIT_SHA").to_string();
-    view::Register {
+    View(view::Register {
         messages: messages.into_iter().collect(),
         next: None,
-        version_string,
         form,
-    }
+    })
     .into_response()
 }
 
 // @TODO figure out how to put this validation just on the NewModelRecords
-#[derive(DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
+#[derive(Clone, DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
 pub struct RegistrationData {
     #[validate(length(min = 1))]
     pub name: String,
@@ -239,7 +235,6 @@ pub async fn oauth(
                 view::Login {
                     messages: messages.into_iter().collect(),
                     next: None,
-                    version_string: "".to_string(),
                 },
             )
                 .into_response();

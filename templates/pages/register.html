@@ -1,10 +1,4 @@
 {% import "components/alerts.html" as alerts %}
-{% extends "layout.html" %}
-
-{% block title %}Sign up for an account{% endblock %}
-{% block header %}{% endblock %}
-
-{% block content %}
 <section class="mt-36 mx-auto w-screen max-w-xl">
   {% call alerts::alerts(messages) %}
   <article class="flex rounded-md max-w-5xl mt-10 flex-col overflow-hidden border border-gray-500 bg-surface-alt dark:bg-surfaceDark-alt text-gray-800 dark:border-gray-500 dark:text-gray-300">
@@ -74,4 +68,3 @@
     </div>
   </article>
 </section>
-{% endblock %}

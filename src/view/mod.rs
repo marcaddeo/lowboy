@@ -4,6 +4,8 @@ mod post;
 mod post_form;
 mod register;
 
+use std::collections::HashMap;
+
 use askama::Template;
 use axum::{
     body::Body,
@@ -26,6 +28,7 @@ pub struct LayoutTemplate {
     content: String,
     version_string: String,
     user: Option<model::User>,
+    stuff: HashMap<String, String>,
 }
 
 pub async fn render_view(
@@ -40,10 +43,12 @@ pub async fn render_view(
             None
         };
         let version_string = env!("VERGEN_GIT_SHA").to_string();
+        let stuff = HashMap::from([("something".to_string(), "value".to_string())]);
         LayoutTemplate {
             content: template.clone(),
             version_string,
             user,
+            stuff,
         }
         .into_response()
     } else {
