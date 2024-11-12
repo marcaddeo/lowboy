@@ -61,7 +61,7 @@ table! {
 #[derive(QueryableByName, Queryable, Insertable, Selectable, PartialEq, Debug)]
 #[diesel(table_name = tower_sessions)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-struct TowerSession {
+pub struct TowerSession {
     id: String,
     data: Vec<u8>,
     expiry_date: i64,

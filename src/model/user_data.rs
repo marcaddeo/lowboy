@@ -1,5 +1,5 @@
-use crate::app::Connection;
 use crate::model::UserRecord;
+use crate::Connection;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use lowboy_record::prelude::*;

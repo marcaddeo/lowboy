@@ -1,7 +1,7 @@
 use crate::{
-    app::{AuthSession, DatabaseConnection},
     model::{CredentialKind, Credentials, OAuthCredentials, User},
     view::{self, View},
+    AuthSession, DatabaseConnection,
 };
 use axum::{
     extract::Query,

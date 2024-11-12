@@ -1,6 +1,6 @@
-use crate::app::Connection;
 use crate::model::{UserData, UserDataRecord};
 use crate::schema::{user, user_data};
+use crate::Connection;
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
 use diesel::upsert::excluded;

@@ -1,4 +1,5 @@
 use app::App;
+use lowboy::LowboyApp;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
@@ -12,6 +13,7 @@ mod view;
 #[cfg_attr(debug_assertions, dotenvy::load)]
 #[tokio::main]
 async fn main() {
+    let lb: LowboyApp;
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {

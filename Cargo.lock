@@ -575,7 +575,6 @@ dependencies = [
  "flume",
  "futures",
  "lowboy",
- "lowboy_record",
  "notify",
  "oauth2",
  "password-auth",
