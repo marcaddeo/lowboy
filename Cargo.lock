@@ -574,6 +574,7 @@ dependencies = [
  "fake",
  "flume",
  "futures",
+ "lowboy",
  "lowboy_record",
  "notify",
  "oauth2",
