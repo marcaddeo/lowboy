@@ -4,6 +4,7 @@
     <span>&Lscr;<span class="text-2xl text-sky-900 dark:text-sky-400">owboy</span></span>
     <!-- <img src="./your-logo.svg" alt="brand logo" class="w-10" /> -->
   </a>
+{% if let Some(user) = user %}
   <!-- Search -->
   <div class="relative flex ml-4 w-full max-w-md flex-col gap-1 text-gray-800 dark:text-gray-300">
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" aria-hidden="true" class="absolute left-2.5 top-1/2 size-5 -translate-y-1/2 text-gray-800/50 dark:text-gray-300/50">
@@ -80,4 +81,5 @@
     <!-- CTA Button -->
     <li class="mt-4 w-full border-none"><a href="/logout" class="rounded-md bg-sky-900 px-4 py-2 block text-center font-medium tracking-wide text-white hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 active:opacity-100 active:outline-offset-0 dark:bg-sky-400 dark:text-black dark:focus-visible:outline-sky-400">Sign Out</a></li>
   </ul>
+{% endif %}
 </nav>
