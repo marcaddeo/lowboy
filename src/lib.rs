@@ -96,7 +96,7 @@ impl Context {
 pub trait App: Send {
     fn name() -> &'static str;
 
-    fn routes() -> ();
+    fn routes() -> Router<Lowboy>;
 }
 
 #[derive(Clone)]
@@ -111,7 +111,7 @@ impl Lowboy {
         Self { context }
     }
 
-    pub async fn serve(self) -> Result<()> {
+    pub async fn serve<App: self::App>(self) -> Result<()> {
         let session_store = DieselSqliteSessionStore::new(self.context.database.clone());
         session_store.migrate().await?;
 
@@ -136,6 +136,8 @@ impl Lowboy {
 
         let auth_layer = AuthManagerLayerBuilder::new(self.clone(), session_layer).build();
 
+        let app_routes = App::routes();
+
         let router = Router::new()
             // App routes.
             .route("/events", get(controller::events))
@@ -150,13 +152,13 @@ impl Lowboy {
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
+            .merge(app_routes)
             .layer(middleware::map_response_with_state(
                 self.clone(),
                 view::render_view,
             ))
             .layer(MessagesManagerLayer)
-            .layer(auth_layer)
-            .with_state(self);
+            .layer(auth_layer);
 
         // Enable livereload for debug builds.
         #[cfg(debug_assertions)]
@@ -165,7 +167,7 @@ impl Lowboy {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
         info!("listening on {}", listener.local_addr().unwrap());
 
-        axum::serve(listener, router.into_make_service())
+        axum::serve(listener, router.with_state(self).into_make_service())
             .with_graceful_shutdown(Self::shutdown_signal(Some(deletion_task.abort_handle())))
             .await?;
 
@@ -361,7 +363,9 @@ fn not_htmx_predicate<T>(req: &axum::extract::Request<T>) -> bool {
 }
 
 #[cfg(debug_assertions)]
-fn livereload(router: axum::Router) -> Result<(axum::Router, notify::FsEventWatcher)> {
+fn livereload(
+    router: axum::Router<Lowboy>,
+) -> Result<(axum::Router<Lowboy>, notify::FsEventWatcher)> {
     use notify::Watcher;
 
     let livereload = tower_livereload::LiveReloadLayer::new();
