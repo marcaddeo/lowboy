@@ -1,6 +1,7 @@
-use crate::{app::DatabaseConnection, lowboy_view, model::Post};
+use crate::model::Post;
 use askama::Template;
 use axum::response::IntoResponse;
+use lowboy::{lowboy_view, DatabaseConnection};
 
 #[derive(Clone, Template)]
 #[template(path = "pages/home.html")]

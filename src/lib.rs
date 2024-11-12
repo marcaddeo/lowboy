@@ -40,9 +40,9 @@ use tracing::{info, warn};
 
 mod controller;
 mod diesel_sqlite_session_store;
-mod model;
+pub mod model;
 mod schema;
-mod view;
+pub mod view;
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 

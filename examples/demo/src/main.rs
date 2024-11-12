@@ -1,10 +1,7 @@
-use app::App;
-use lowboy::LowboyApp;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
 
 mod app;
 mod controller;
-mod diesel_sqlite_session_store;
 mod model;
 mod schema;
 mod view;
@@ -13,7 +10,6 @@ mod view;
 #[cfg_attr(debug_assertions, dotenvy::load)]
 #[tokio::main]
 async fn main() {
-    let lb: LowboyApp;
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -23,5 +19,5 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let _ = App::new().await.expect("app should boot").serve().await;
+    // let _ = App::new().await.expect("app should boot").serve().await;
 }

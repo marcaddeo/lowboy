@@ -6,6 +6,7 @@ build = "build.rs"
 
 [dependencies]
 lowboy = { path = "../../" }
+lowboy_record = { path = "../../lib/lowboy_record" }
 anyhow = "1.0.92"
 askama = { git = "https://github.com/djc/askama", features = ["with-axum"] }
 askama_axum = { git = "https://github.com/djc/askama" }
@@ -37,7 +38,6 @@ dotenvy = { git = "https://github.com/allan2/dotenvy", features = ["macros"] }
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
-lowboy_record = { version = "0.1.0", path = "../../lib/lowboy_record" }
 notify = "7.0.0"
 oauth2 = "4.4.2"
 password-auth = "1.0.0"
