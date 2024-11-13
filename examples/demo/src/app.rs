@@ -11,6 +11,7 @@ pub struct DemoContext {
     pub database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
     pub events: lowboy::Events,
     pub scheduler: tokio_cron_scheduler::JobScheduler,
+    pub my_custom_thing: Vec<String>,
 }
 
 impl AppContext for DemoContext {
@@ -23,6 +24,7 @@ impl AppContext for DemoContext {
             database,
             events,
             scheduler,
+            my_custom_thing: vec![],
         })
     }
 }
@@ -57,6 +59,8 @@ impl App<DemoContext> for Demo {
     }
 }
 
+// Or, without a custom context:
+//
 // impl App<LowboyContext> for Demo {
 //     fn name() -> &'static str {
 //         "demo"
