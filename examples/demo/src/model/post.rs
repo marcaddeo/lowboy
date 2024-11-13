@@ -1,9 +1,10 @@
-use super::User;
-use crate::app::Connection;
-use crate::model::UserRecord;
 use crate::schema::post;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
+use lowboy::{
+    model::{User, UserRecord},
+    Connection,
+};
 use lowboy_record::prelude::*;
 
 #[apply(lowboy_record!)]

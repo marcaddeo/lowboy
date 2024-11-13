@@ -548,6 +548,56 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87c5c1460bfb0f719e899feab6ae532e5e0f059cdc85913bab8e6a0d7980245e"
 
 [[package]]
+name = "demo"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "askama",
+ "askama_axum",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "axum-extra",
+ "axum-login",
+ "axum-messages",
+ "base64 0.22.1",
+ "chrono",
+ "deadpool",
+ "deadpool-diesel",
+ "derive-masked",
+ "derive_builder",
+ "derive_more",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "dotenvy",
+ "fake",
+ "flume",
+ "futures",
+ "lowboy",
+ "lowboy_record",
+ "notify",
+ "oauth2",
+ "password-auth",
+ "reqwest 0.12.9",
+ "rmp-serde",
+ "serde",
+ "thiserror 2.0.1",
+ "tokio",
+ "tokio-cron-scheduler",
+ "tower 0.5.1",
+ "tower-http",
+ "tower-livereload",
+ "tower-sessions",
+ "tower-sessions-core",
+ "tracing",
+ "tracing-subscriber",
+ "validator",
+ "vergen-gitcl",
+ "xdg",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"

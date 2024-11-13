@@ -1,6 +1,7 @@
-use crate::{app::DatabaseConnection, lowboy_view, model::Post};
+use crate::{app::DemoContext, model::Post};
 use askama::Template;
-use axum::response::IntoResponse;
+use axum::{extract::State, response::IntoResponse};
+use lowboy::{lowboy_view, LowboyContext};
 
 #[derive(Clone, Template)]
 #[template(path = "pages/home.html")]
@@ -8,7 +9,8 @@ pub struct HomeTemplate {
     pub posts: Vec<Post>,
 }
 
-pub async fn home(DatabaseConnection(mut conn): DatabaseConnection) -> impl IntoResponse {
+pub async fn home(State(context): State<DemoContext>) -> impl IntoResponse {
+    let mut conn = context.database.get().await.unwrap();
     let posts = Post::list(&mut conn, Some(5)).await.unwrap();
 
     lowboy_view!(HomeTemplate { posts }, {
