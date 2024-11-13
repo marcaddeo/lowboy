@@ -1,10 +1,10 @@
 use crate::{
     model::{CredentialKind, Credentials, OAuthCredentials, User},
     view::{self, View},
-    AuthSession, DatabaseConnection,
+    AppContext, AuthSession,
 };
 use axum::{
-    extract::Query,
+    extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
     Form,
@@ -79,11 +79,11 @@ pub struct RegistrationData {
     password: String,
 }
 
-pub async fn register(
+pub async fn register<T: AppContext>(
+    State(context): State<T>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
-    DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<RegistrationData>,
 ) -> impl IntoResponse {
     if user.is_some() {
@@ -106,6 +106,8 @@ pub async fn register(
         session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
         return Redirect::to("/register").into_response();
     };
+
+    let mut conn = context.database().get().await.unwrap();
 
     let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
     let avatar = format!(

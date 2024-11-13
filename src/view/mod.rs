@@ -4,10 +4,11 @@ mod register;
 pub(crate) use login::*;
 pub(crate) use register::*;
 
-use crate::{model, AuthSession, DatabaseConnection};
+use crate::{model, AppContext, AuthSession};
 use askama::Template;
 use axum::{
     body::Body,
+    extract::State,
     response::{IntoResponse, Response},
 };
 use std::collections::BTreeMap;
@@ -21,12 +22,13 @@ pub struct LayoutTemplate {
     metadata: BTreeMap<String, String>,
 }
 
-pub async fn render_view(
+pub async fn render_view<T: AppContext>(
+    State(context): State<T>,
     AuthSession { user, .. }: AuthSession,
-    DatabaseConnection(mut conn): DatabaseConnection,
     response: Response,
 ) -> impl IntoResponse {
     if let Some(RenderedTemplate(template)) = response.extensions().get::<RenderedTemplate>() {
+        let mut conn = context.database().get().await.unwrap();
         let user = if let Some(record) = user {
             Some(model::User::from_record(&record, &mut conn).await.unwrap())
         } else {

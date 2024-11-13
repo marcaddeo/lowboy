@@ -45,34 +45,84 @@ mod schema;
 pub mod view;
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
+pub type Events = (Sender<Event>, Receiver<Event>);
+
+pub trait Context: Send + Sync + 'static {
+    fn database(&self) -> &Pool<Connection>;
+    fn events(&self) -> &Events;
+    fn scheduler(&self) -> &JobScheduler;
+}
+
+pub trait AppContext: Context + Clone {
+    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>;
+}
 
 #[derive(Clone)]
-pub struct Context {
+pub struct LowboyContext {
     pub database: Pool<SyncConnectionWrapper<SqliteConnection>>,
     pub events: (Sender<Event>, Receiver<Event>),
     #[allow(dead_code)]
     pub scheduler: JobScheduler,
-    pub oauth: BasicClient,
 }
 
-impl Context {
-    pub async fn new() -> Result<Self> {
-        let database =
-            xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
+impl Context for LowboyContext {
+    fn database(&self) -> &Pool<Connection> {
+        &self.database
+    }
 
-        let config = AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new(
-            database.to_str().expect("database path should be valid"),
-        );
+    fn events(&self) -> &Events {
+        &self.events
+    }
 
-        let database = Pool::builder(config).build().unwrap();
+    fn scheduler(&self) -> &JobScheduler {
+        &self.scheduler
+    }
+}
 
-        let (tx, rx) = flume::bounded::<Event>(32);
+impl AppContext for LowboyContext {
+    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self> {
+        Ok(Self {
+            database,
+            events,
+            scheduler,
+        })
+    }
+}
 
-        let scheduler = tokio_cron_scheduler::JobScheduler::new()
-            .await
-            .expect("job scheduler should be created");
-        scheduler.start().await.expect("scheduler should start");
+pub async fn create_context<AC: AppContext>() -> Result<AC> {
+    let database =
+        xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
+    let config = AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new(
+        database.to_str().expect("database path should be valid"),
+    );
+
+    let database = Pool::builder(config).build().unwrap();
+
+    let events = flume::bounded::<Event>(32);
+
+    let scheduler = tokio_cron_scheduler::JobScheduler::new()
+        .await
+        .expect("job scheduler should be created");
+    scheduler.start().await.expect("scheduler should start");
+
+    AC::create(database, events, scheduler)
+}
+
+pub trait App<AC: AppContext>: Send {
+    fn name() -> &'static str;
+
+    fn routes() -> Router<AC>;
+}
+
+#[derive(Clone)]
+pub struct LowboyAuth {
+    oauth: BasicClient,
+    database: Pool<Connection>,
+}
+
+impl LowboyAuth {
+    pub fn new(database: Pool<Connection>) -> Result<Self> {
         let client_id = std::env::var("CLIENT_ID")
             .map(ClientId::new)
             .expect("CLIENT_ID should be provided.");
@@ -84,35 +134,28 @@ impl Context {
         let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?;
         let oauth = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url));
 
-        Ok(Self {
-            database,
-            events: (tx, rx),
-            scheduler,
-            oauth,
-        })
+        Ok(Self { oauth, database })
+    }
+
+    pub fn authorize_url(&self) -> (Url, CsrfToken) {
+        self.oauth.authorize_url(CsrfToken::new_random).url()
     }
 }
 
-pub trait App: Send {
-    fn name() -> &'static str;
-
-    fn routes() -> Router<Lowboy>;
-}
-
 #[derive(Clone)]
-pub struct Lowboy {
-    context: Context,
+pub struct Lowboy<T: AppContext> {
+    context: T,
 }
 
-impl Lowboy {
+impl<T: AppContext> Lowboy<T> {
     pub async fn boot() -> Self {
-        let context = Context::new().await.unwrap();
+        let context = create_context().await.unwrap();
 
         Self { context }
     }
 
-    pub async fn serve<App: self::App>(self) -> Result<()> {
-        let session_store = DieselSqliteSessionStore::new(self.context.database.clone());
+    pub async fn serve<App: self::App<T>>(self) -> Result<()> {
+        let session_store = DieselSqliteSessionStore::new(self.context.database().clone());
         session_store.migrate().await?;
 
         let deletion_task = tokio::task::spawn(
@@ -134,28 +177,29 @@ impl Lowboy {
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
             .with_signed(session_key);
 
-        let auth_layer = AuthManagerLayerBuilder::new(self.clone(), session_layer).build();
+        let lowboy_auth = LowboyAuth::new(self.context.database().clone())?;
+        let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let app_routes = App::routes();
 
         let router = Router::new()
             // App routes.
-            .route("/events", get(controller::events))
+            .route("/events", get(controller::events::<T>))
             // Previous routes require authentication.
-            .route_layer(login_required!(Lowboy, login_url = "/login"))
+            .route_layer(login_required!(LowboyAuth, login_url = "/login"))
             // Static assets.
             .nest_service("/static", ServeDir::new("static"))
             // Auth routes.
             .route("/register", get(controller::auth::register_form))
-            .route("/register", post(controller::auth::register))
+            .route("/register", post(controller::auth::register::<T>))
             .route("/login", get(controller::auth::form))
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
             .merge(app_routes)
             .layer(middleware::map_response_with_state(
-                self.clone(),
-                view::render_view,
+                self.context.clone(),
+                view::render_view::<T>,
             ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer);
@@ -167,40 +211,36 @@ impl Lowboy {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
         info!("listening on {}", listener.local_addr().unwrap());
 
-        axum::serve(listener, router.with_state(self).into_make_service())
-            .with_graceful_shutdown(Self::shutdown_signal(Some(deletion_task.abort_handle())))
-            .await?;
+        axum::serve(
+            listener,
+            router.with_state(self.context).into_make_service(),
+        )
+        .with_graceful_shutdown(shutdown_signal(Some(deletion_task.abort_handle())))
+        .await?;
 
         deletion_task.await??;
 
         Ok(())
     }
+}
 
-    pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
-        let ctrl_c = async {
-            signal::ctrl_c()
-                .await
-                .expect("failed to install Ctrl+C handler");
-        };
+pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
+    let ctrl_c = async {
+        signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
 
-        let terminate = async {
-            signal::unix::signal(signal::unix::SignalKind::terminate())
-                .expect("failed to install signal handler")
-                .recv()
-                .await;
-        };
+    let terminate = async {
+        signal::unix::signal(signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
 
-        tokio::select! {
-            _ = ctrl_c => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
-            _ = terminate => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
-        }
-    }
-
-    pub fn authorize_url(&self) -> (Url, CsrfToken) {
-        self.context
-            .oauth
-            .authorize_url(CsrfToken::new_random)
-            .url()
+    tokio::select! {
+        _ = ctrl_c => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
+        _ = terminate => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
     }
 }
 
@@ -231,7 +271,7 @@ pub struct GitHubUserInfo {
 }
 
 #[async_trait]
-impl AuthnBackend for Lowboy {
+impl AuthnBackend for LowboyAuth {
     type User = UserRecord;
     type Credentials = model::Credentials;
     type Error = Error;
@@ -242,7 +282,7 @@ impl AuthnBackend for Lowboy {
     ) -> Result<Option<Self::User>, Self::Error> {
         use model::CredentialKind;
 
-        let mut conn = self.context.database.get().await?;
+        let mut conn = self.database.get().await?;
 
         match credentials.kind {
             CredentialKind::Password => {
@@ -273,7 +313,6 @@ impl AuthnBackend for Lowboy {
 
                 // Process authorization code, expecting a token response back.
                 let token_res = self
-                    .context
                     .oauth
                     .exchange_code(AuthorizationCode::new(credentials.code))
                     .request_async(async_http_client)
@@ -321,34 +360,12 @@ impl AuthnBackend for Lowboy {
         &self,
         user_id: &axum_login::UserId<Self>,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let mut conn = self.context.database.get().await?;
+        let mut conn = self.database.get().await?;
         Ok(Some(User::find(*user_id, &mut conn).await?.into()))
     }
 }
 
-pub type AuthSession = axum_login::AuthSession<Lowboy>;
-
-pub struct DatabaseConnection(
-    pub  deadpool::managed::Object<
-        AsyncDieselConnectionManager<SyncConnectionWrapper<diesel::SqliteConnection>>,
-    >,
-);
-
-#[async_trait]
-impl<S> FromRequestParts<S> for DatabaseConnection
-where
-    S: Send + Sync,
-    Lowboy: FromRef<S>,
-{
-    type Rejection = (StatusCode, String);
-
-    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let app = Lowboy::from_ref(state);
-        let conn = app.context.database.get().await.map_err(internal_error)?;
-
-        Ok(Self(conn))
-    }
-}
+pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
 
 fn internal_error<E>(err: E) -> (StatusCode, String)
 where
@@ -363,9 +380,9 @@ fn not_htmx_predicate<T>(req: &axum::extract::Request<T>) -> bool {
 }
 
 #[cfg(debug_assertions)]
-fn livereload(
-    router: axum::Router<Lowboy>,
-) -> Result<(axum::Router<Lowboy>, notify::FsEventWatcher)> {
+fn livereload<T: AppContext>(
+    router: axum::Router<T>,
+) -> Result<(axum::Router<T>, notify::FsEventWatcher)> {
     use notify::Watcher;
 
     let livereload = tower_livereload::LiveReloadLayer::new();

@@ -1,4 +1,4 @@
-use crate::Lowboy;
+use crate::{shutdown_signal, AppContext};
 use axum::{
     extract::State,
     response::sse::{Event, Sse},
@@ -8,13 +8,13 @@ use futures::{Stream, StreamExt as _};
 use std::{convert::Infallible, time::Duration};
 use tracing::info;
 
-pub async fn events(
-    State(Lowboy { context, .. }): State<Lowboy>,
+pub async fn events<T: AppContext>(
+    State(context): State<T>,
     TypedHeader(user_agent): TypedHeader<headers::UserAgent>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     info!("`{}` connected", user_agent.as_str());
 
-    let (_, rx) = context.events;
+    let (_, rx) = context.events().clone();
     let stream = rx.into_stream().map(Ok);
     let stream = or_until_shutdown(stream);
 
@@ -32,7 +32,7 @@ where
     async_stream::stream! {
         futures::pin_mut!(stream);
 
-        let shutdown_signal = Lowboy::shutdown_signal(None);
+        let shutdown_signal = shutdown_signal(None);
         futures::pin_mut!(shutdown_signal);
 
         loop {
