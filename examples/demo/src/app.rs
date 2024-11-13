@@ -4,16 +4,51 @@ use axum::{
     Router,
 };
 use axum_login::login_required;
-use lowboy::{App, LowboyAuth, LowboyContext};
+use lowboy::{App, AppContext, Context, LowboyAuth, LowboyContext};
+
+#[derive(Clone)]
+pub struct DemoContext {
+    pub database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
+    pub events: lowboy::Events,
+    pub scheduler: tokio_cron_scheduler::JobScheduler,
+}
+
+impl AppContext for DemoContext {
+    fn create(
+        database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
+        events: lowboy::Events,
+        scheduler: tokio_cron_scheduler::JobScheduler,
+    ) -> anyhow::Result<Self> {
+        Ok(Self {
+            database,
+            events,
+            scheduler,
+        })
+    }
+}
+
+impl Context for DemoContext {
+    fn database(&self) -> &diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection> {
+        &self.database
+    }
+
+    fn events(&self) -> &lowboy::Events {
+        &self.events
+    }
+
+    fn scheduler(&self) -> &tokio_cron_scheduler::JobScheduler {
+        &self.scheduler
+    }
+}
 
 pub struct Demo;
 
-impl App<LowboyContext> for Demo {
+impl App<DemoContext> for Demo {
     fn name() -> &'static str {
         "demo"
     }
 
-    fn routes() -> Router<LowboyContext> {
+    fn routes() -> Router<DemoContext> {
         Router::new()
             .route("/post", post(controller::post::create))
             .route("/", get(controller::home))
@@ -21,3 +56,17 @@ impl App<LowboyContext> for Demo {
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
     }
 }
+
+// impl App<LowboyContext> for Demo {
+//     fn name() -> &'static str {
+//         "demo"
+//     }
+//
+//     fn routes() -> Router<LowboyContext> {
+//         Router::new()
+//             .route("/post", post(controller::post::create))
+//             .route("/", get(controller::home))
+//             // Previous routes require authentication.
+//             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
+//     }
+// }

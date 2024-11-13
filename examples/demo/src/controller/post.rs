@@ -1,5 +1,5 @@
-use crate::model::Post;
 use crate::view;
+use crate::{app::DemoContext, model::Post};
 use axum::extract::{Form, State};
 use lowboy::{AuthSession, LowboyContext};
 use serde::Deserialize;
@@ -11,7 +11,7 @@ pub struct PostCreateForm {
 
 pub async fn create(
     auth_session: AuthSession,
-    State(context): State<LowboyContext>,
+    State(context): State<DemoContext>,
     Form(input): Form<PostCreateForm>,
 ) -> String {
     let mut conn = context.database.get().await.unwrap();
