@@ -4,7 +4,7 @@ mod register;
 pub(crate) use login::*;
 pub(crate) use register::*;
 
-use crate::{model, AppContext, AuthSession};
+use crate::{auth::AuthSession, model, AppContext};
 use askama::Template;
 use axum::{
     body::Body,

@@ -1,7 +1,8 @@
 use crate::{
+    auth::AuthSession,
     model::{CredentialKind, Credentials, OAuthCredentials, User},
     view::{self, View},
-    AppContext, AuthSession,
+    AppContext,
 };
 use axum::{
     extract::{Query, State},

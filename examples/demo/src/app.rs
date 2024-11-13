@@ -4,7 +4,7 @@ use axum::{
     Router,
 };
 use axum_login::login_required;
-use lowboy::{App, AppContext, Context, LowboyAuth, LowboyContext};
+use lowboy::{App, AppContext, Context, LowboyAuth};
 
 #[derive(Clone)]
 pub struct DemoContext {
