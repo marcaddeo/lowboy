@@ -1,7 +1,7 @@
 use crate::{app::DemoContext, model::Post};
 use askama::Template;
 use axum::{extract::State, response::IntoResponse};
-use lowboy::{lowboy_view, LowboyContext};
+use lowboy::lowboy_view;
 
 #[derive(Clone, Template)]
 #[template(path = "pages/home.html")]
