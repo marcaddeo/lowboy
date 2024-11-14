@@ -1,6 +1,5 @@
 use anyhow::Result;
 use axum::{
-    http::StatusCode,
     middleware,
     response::sse::Event,
     routing::{get, post},
