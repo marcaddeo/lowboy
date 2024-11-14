@@ -1,6 +1,7 @@
 mod login;
 mod register;
 
+use axum_messages::{Message, Messages};
 pub(crate) use login::*;
 pub(crate) use register::*;
 
@@ -16,6 +17,7 @@ use std::collections::BTreeMap;
 #[derive(Template)]
 #[template(path = "layout.html")]
 pub struct LayoutTemplate {
+    messages: Vec<Message>,
     content: String,
     version_string: String,
     user: Option<model::User>,
@@ -25,6 +27,7 @@ pub struct LayoutTemplate {
 pub async fn render_view<T: AppContext>(
     State(context): State<T>,
     AuthSession { user, .. }: AuthSession,
+    messages: Messages,
     response: Response,
 ) -> impl IntoResponse {
     if let Some(RenderedTemplate(template)) = response.extensions().get::<RenderedTemplate>() {
@@ -42,6 +45,7 @@ pub async fn render_view<T: AppContext>(
         }
 
         LayoutTemplate {
+            messages: messages.into_iter().collect(),
             content: template.clone(),
             version_string,
             user,

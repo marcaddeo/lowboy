@@ -34,20 +34,13 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form(
-    messages: Messages,
-    Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
-    View(view::Login {
-        messages: messages.into_iter().collect(),
-        next,
-    })
+pub async fn form(Query(NextUrl { next }): Query<NextUrl>) -> impl IntoResponse {
+    View(view::Login { next })
 }
 
 pub async fn register_form(
     AuthSession { user, .. }: AuthSession,
     session: Session,
-    messages: Messages,
 ) -> impl IntoResponse {
     if user.is_some() {
         return Redirect::to("/").into_response();
@@ -59,12 +52,7 @@ pub async fn register_form(
         .unwrap()
         .unwrap_or_default();
 
-    View(view::Register {
-        messages: messages.into_iter().collect(),
-        next: None,
-        form,
-    })
-    .into_response()
+    View(view::Register { next: None, form }).into_response()
 }
 
 // @TODO figure out how to put this validation just on the NewModelRecords
@@ -232,15 +220,8 @@ pub async fn oauth(
     let user = match auth_session.authenticate(credentials).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            let messages = messages.error("Invalid CSRF state");
-            return (
-                StatusCode::UNAUTHORIZED,
-                view::Login {
-                    messages: messages.into_iter().collect(),
-                    next: None,
-                },
-            )
-                .into_response();
+            messages.error("Invalid CSRF state");
+            return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
