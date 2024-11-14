@@ -46,7 +46,7 @@ pub async fn register_form(
         return Redirect::to("/").into_response();
     }
 
-    let form: RegistrationData = session
+    let form: RegisterForm = session
         .remove(REGISTRATION_FORM_KEY)
         .await
         .unwrap()
@@ -57,7 +57,7 @@ pub async fn register_form(
 
 // @TODO figure out how to put this validation just on the NewModelRecords
 #[derive(Clone, DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
-pub struct RegistrationData {
+pub struct RegisterForm {
     #[validate(length(min = 1))]
     pub name: String,
     #[validate(length(min = 1, max = 32))]
@@ -73,7 +73,7 @@ pub async fn register<T: AppContext>(
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
-    Form(input): Form<RegistrationData>,
+    Form(input): Form<RegisterForm>,
 ) -> impl IntoResponse {
     if user.is_some() {
         return Redirect::to("/").into_response();
