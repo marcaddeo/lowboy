@@ -1,4 +1,4 @@
-use askama::Template;
+use rinja::Template;
 
 #[derive(Clone, Default, Template)]
 #[template(path = "components/post-form.html")]

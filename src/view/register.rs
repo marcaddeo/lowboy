@@ -1,5 +1,5 @@
 use crate::controller::auth::RegisterForm;
-use askama::Template;
+use rinja::Template;
 
 #[derive(Clone, Template)]
 #[template(path = "pages/register.html")]

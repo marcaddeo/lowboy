@@ -1,4 +1,4 @@
-use askama::Template;
+use rinja::Template;
 
 #[derive(Clone, Template)]
 #[template(path = "pages/login.html")]

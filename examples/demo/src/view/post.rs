@@ -1,5 +1,5 @@
 use crate::model;
-use askama::Template;
+use rinja::Template;
 
 #[derive(Clone, Template)]
 #[template(path = "components/post.html")]
