@@ -22,7 +22,7 @@ pub async fn render_view<T: AppContext>(
     messages: Messages,
     response: Response,
 ) -> impl IntoResponse {
-    if let Some(view) = response.extensions().get::<ViewBox>() {
+    if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await.unwrap();
         let user = if let Some(record) = user {
             Some(model::User::from_record(&record, &mut conn).await.unwrap())
@@ -38,7 +38,7 @@ pub async fn render_view<T: AppContext>(
 
         Layout {
             messages: messages.into_iter().collect(),
-            content: view.0.to_string(),
+            content: view.to_string(),
             version_string,
             user,
             context,
