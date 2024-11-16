@@ -543,7 +543,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "validator",
- "vergen-gitcl",
  "xdg",
 ]
 

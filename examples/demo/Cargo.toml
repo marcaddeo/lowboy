@@ -56,8 +56,3 @@ validator = { version = "0.19.0", features = ["derive"] }
 xdg = "2.5.2"
 rinja = "0.3.5"
 rinja_axum = "0.3.5"
-
-[build-dependencies]
-anyhow = "1.0.92"
-tokio = { version = "1.41.0", features = ["full"] }
-vergen-gitcl = "1.0.1"

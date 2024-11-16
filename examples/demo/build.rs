@@ -1,13 +1,3 @@
-use anyhow::Result;
-use vergen_gitcl::{Emitter, GitclBuilder};
-
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() {
     println!("cargo:rerun-if-changed=NULL");
-
-    Emitter::default()
-        .add_instructions(&GitclBuilder::all_git()?)?
-        .emit()?;
-
-    Ok(())
 }

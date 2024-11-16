@@ -2,6 +2,6 @@
   <span class="text-xs"><span class="text-xl">&Lscr;</span>owboy</span>
 {% if let Some(version) = context.get("lowboy_version") %}
   <div class="inline-block text-base nf nf-cod-git_commit"></div>
-  <a class="text-xs" href="https://github.com/marcaddeo/lowboy/commit/{{ version }}">{{ "{:.7}"|format(version) }}</a>
+  <a class="text-xs" href="https://github.com/marcaddeo/lowboy/commit/{{ version }}">{{ version|fmt("{:.7}") }}</a>
 {% endif %}
 </footer>

@@ -37,6 +37,8 @@ pub async fn render_view<App: app::App<AC>, AC: AppContext>(
             layout_context.append(&mut data.clone());
         }
 
+        // @perf consider switching to .render() over .to_string()
+        // @see https://rinja.readthedocs.io/en/stable/performance.html
         Html(
             App::layout(&context)
                 .set_messages(messages.into_iter().collect())

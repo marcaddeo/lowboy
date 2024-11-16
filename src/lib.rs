@@ -54,7 +54,7 @@ impl<T: AppContext> Lowboy<T> {
         Self { context }
     }
 
-    pub async fn serve<App: app::App<T> + 'static>(self) -> Result<()> {
+    pub async fn serve<App: app::App<T>>(self) -> Result<()> {
         let session_store = DieselSqliteSessionStore::new(self.context.database().clone());
         session_store.migrate().await?;
 
