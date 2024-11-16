@@ -12,11 +12,9 @@ use lowboy_record::prelude::*;
 pub trait ModelRecord {}
 
 // @TODO pub trait FromRecord<T: ModelRecord> {
+#[async_trait::async_trait]
 pub trait FromRecord<T> {
-    fn from_record(
-        record: &T,
-        conn: &mut Connection,
-    ) -> impl std::future::Future<Output = QueryResult<Self>> + Send
+    async fn from_record(record: &T, conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized;
 }
@@ -70,6 +68,7 @@ impl User {
     }
 }
 
+#[async_trait::async_trait]
 impl FromRecord<UserRecord> for User {
     async fn from_record(record: &UserRecord, conn: &mut Connection) -> QueryResult<Self> {
         Self::from_record(record, conn).await
