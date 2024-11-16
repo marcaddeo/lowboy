@@ -4,22 +4,24 @@ use axum::{
     Router,
 };
 use axum_login::login_required;
-use lowboy::{App, AppContext, Context, LowboyAuth};
+use diesel_async::pooled_connection::deadpool::Pool;
+use lowboy::{App, AppContext, Connection, Context, Events, LowboyAuth};
+use tokio_cron_scheduler::JobScheduler;
 
 #[derive(Clone)]
 pub struct DemoContext {
-    pub database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
-    pub events: lowboy::Events,
-    pub scheduler: tokio_cron_scheduler::JobScheduler,
+    pub database: Pool<Connection>,
+    pub events: Events,
+    pub scheduler: JobScheduler,
     #[allow(dead_code)]
     pub my_custom_thing: Vec<String>,
 }
 
 impl AppContext for DemoContext {
     fn create(
-        database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
-        events: lowboy::Events,
-        scheduler: tokio_cron_scheduler::JobScheduler,
+        database: Pool<Connection>,
+        events: Events,
+        scheduler: JobScheduler,
     ) -> anyhow::Result<Self> {
         Ok(Self {
             database,
@@ -31,15 +33,15 @@ impl AppContext for DemoContext {
 }
 
 impl Context for DemoContext {
-    fn database(&self) -> &diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection> {
+    fn database(&self) -> &Pool<Connection> {
         &self.database
     }
 
-    fn events(&self) -> &lowboy::Events {
+    fn events(&self) -> &Events {
         &self.events
     }
 
-    fn scheduler(&self) -> &tokio_cron_scheduler::JobScheduler {
+    fn scheduler(&self) -> &JobScheduler {
         &self.scheduler
     }
 }
