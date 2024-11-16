@@ -2,15 +2,17 @@ use crate::{
     auth::{LowboyLoginView, LowboyRegisterView},
     context::AppContext,
     controller,
+    model::{LowboyUser, UserRecord},
     view::LowboyLayout,
 };
 use axum::Router;
 
 #[allow(unused_variables)]
 pub trait App<AC: AppContext>: Send + 'static {
-    type Layout: LowboyLayout;
+    type Layout: LowboyLayout<Self::User>;
     type RegisterView: LowboyRegisterView;
     type LoginView: LowboyLoginView;
+    type User: LowboyUser<UserRecord>;
 
     fn name() -> &'static str;
 

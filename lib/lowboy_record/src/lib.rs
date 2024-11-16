@@ -369,7 +369,7 @@ macro_rules! internal_model {
     ) => {
         paste! {
             // Model
-            #[derive(Debug, Clone)]
+            #[derive(Debug, Default, Clone)]
             #[doc = "A `" $model "` model"]
             $pub struct $model {
                 $($field_vis $field : $type ,)*

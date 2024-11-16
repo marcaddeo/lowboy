@@ -11,7 +11,7 @@ members = ["examples/demo", "lib/lowboy_record"]
 anyhow = "1.0.92"
 async-stream = "0.3.6"
 async-trait = "0.1.83"
-axum = "0.7.7"
+axum = { version = "0.7.7", features = ["macros"] }
 axum-extra = { version = "0.9.4", features = ["typed-header"] }
 axum-login = "0.16.0"
 axum-messages = "0.7.0"

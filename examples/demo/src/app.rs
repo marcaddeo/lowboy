@@ -11,7 +11,7 @@ use axum::{
 };
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
-use lowboy::{App, AppContext, Connection, Context, Events, LowboyAuth};
+use lowboy::{model::User, App, AppContext, Connection, Context, Events, LowboyAuth};
 use tokio_cron_scheduler::JobScheduler;
 
 #[derive(Clone)]
@@ -55,9 +55,10 @@ impl Context for DemoContext {
 pub struct Demo;
 
 impl App<DemoContext> for Demo {
-    type Layout = Layout;
+    type Layout = Layout<User>;
     type RegisterView = Register;
     type LoginView = Login;
+    type User = User;
 
     fn name() -> &'static str {
         "demo"

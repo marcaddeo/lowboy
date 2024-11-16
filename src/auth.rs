@@ -151,14 +151,7 @@ impl AuthnBackend for LowboyAuth {
                     password: None,
                     access_token: Some(access_token),
                 };
-                let record = new_user
-                    .create_or_update(
-                        &user_info.name,
-                        None,
-                        Some(&user_info.avatar_url),
-                        &mut conn,
-                    )
-                    .await?;
+                let record = new_user.create_or_update(&mut conn).await?;
 
                 Ok(Some(record))
             }

@@ -17,7 +17,7 @@ use validator::Validate;
 use crate::{
     app,
     auth::{LowboyLoginView as _, LowboyRegisterView},
-    model::{CredentialKind, Credentials, OAuthCredentials, User},
+    model::{CredentialKind, Credentials, NewUserRecord, OAuthCredentials},
     view::View,
     AppContext, AuthSession,
 };
@@ -121,10 +121,8 @@ pub async fn register<AC: AppContext>(
         first_name, last_name
     );
     let password = password_auth::generate_hash(&input.password);
-    let new_user = User::new_record(&input.username, &input.email).with_password(Some(&password));
-    let user = new_user
-        .create_or_update(&input.name, None, Some(&avatar), &mut conn)
-        .await;
+    let new_user = NewUserRecord::new(&input.username, &input.email).with_password(Some(&password));
+    let user = new_user.create_or_update(&mut conn).await;
 
     match user {
         Ok(_) => messages.success("Registration successful! You can now log in."),

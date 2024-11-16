@@ -1,5 +1,4 @@
-use crate::model::{UserData, UserDataRecord};
-use crate::schema::{user, user_data};
+use crate::schema::user;
 use crate::Connection;
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
@@ -10,8 +9,28 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use lowboy_record::prelude::*;
 
-use super::NewUserDataRecord;
+pub trait ModelRecord {}
 
+// @TODO pub trait FromRecord<T: ModelRecord> {
+pub trait FromRecord<T> {
+    fn from_record(
+        record: &T,
+        conn: &mut Connection,
+    ) -> impl std::future::Future<Output = QueryResult<Self>> + Send
+    where
+        Self: Sized;
+}
+
+pub trait LowboyUser<T>: FromRecord<T> {
+    fn id(&self) -> i32;
+    fn username(&self) -> &String;
+    fn email(&self) -> &String;
+    fn password(&self) -> &Option<String>;
+    fn access_token(&self) -> &Option<String>;
+}
+
+// @TODO we need to mask the password and access token again, which requires fixing the macro to
+// allow doing so.
 #[apply(lowboy_record!)]
 #[derive(Clone, DebugMasked, Default, Queryable, Selectable, AsChangeset, Identifiable)]
 #[diesel(table_name = crate::schema::user)]
@@ -22,7 +41,6 @@ pub struct User {
     pub email: String,
     pub password: Option<String>,
     pub access_token: Option<String>,
-    pub data: HasOne<UserData>,
 }
 
 impl User {
@@ -52,14 +70,36 @@ impl User {
     }
 }
 
+impl FromRecord<UserRecord> for User {
+    async fn from_record(record: &UserRecord, conn: &mut Connection) -> QueryResult<Self> {
+        Self::from_record(record, conn).await
+    }
+}
+
+impl LowboyUser<UserRecord> for User {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn username(&self) -> &String {
+        &self.username
+    }
+
+    fn email(&self) -> &String {
+        &self.email
+    }
+
+    fn password(&self) -> &Option<String> {
+        &self.password
+    }
+
+    fn access_token(&self) -> &Option<String> {
+        &self.access_token
+    }
+}
+
 impl<'a> NewUserRecord<'a> {
-    pub async fn create_or_update(
-        &self,
-        name: &'a str,
-        byline: Option<&'a str>,
-        avatar: Option<&'a str>,
-        conn: &mut Connection,
-    ) -> QueryResult<UserRecord> {
+    pub async fn create_or_update(&self, conn: &mut Connection) -> QueryResult<UserRecord> {
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
             async move {
                 let user: UserRecord = insert_into(user::table)
@@ -68,15 +108,6 @@ impl<'a> NewUserRecord<'a> {
                     .do_update()
                     .set(user::access_token.eq(excluded(user::access_token)))
                     .get_result(conn)
-                    .await?;
-                let data = NewUserDataRecord::new(user.id, name)
-                    .with_avatar(avatar)
-                    .with_byline(byline);
-                insert_into(user_data::table)
-                    .values(data.clone())
-                    .on_conflict(user_data::user_id)
-                    .do_nothing()
-                    .execute(conn)
                     .await?;
 
                 Ok(user)
