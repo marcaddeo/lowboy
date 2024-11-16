@@ -9,8 +9,6 @@ members = ["examples/demo", "lib/lowboy_record"]
 
 [dependencies]
 anyhow = "1.0.92"
-askama = { git = "https://github.com/djc/askama", features = ["with-axum"] }
-askama_axum = { git = "https://github.com/djc/askama" }
 async-stream = "0.3.6"
 async-trait = "0.1.83"
 axum = "0.7.7"
@@ -36,6 +34,7 @@ diesel = { version = "2.2.4", features = [
 diesel-async = { version = "0.5.1", features = ["deadpool", "pool", "sqlite"] }
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 dotenvy = { git = "https://github.com/allan2/dotenvy", features = ["macros"] }
+dyn-clone = "1.0.17"
 fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
@@ -44,6 +43,8 @@ notify = "7.0.0"
 oauth2 = "4.4.2"
 password-auth = "1.0.0"
 reqwest = { version = "0.12.9", features = ["json"] }
+rinja = "0.3.5"
+rinja_axum = "0.3.5"
 rmp-serde = "1.3.0"
 serde = { version = "1.0.214", features = ["serde_derive"] }
 thiserror = "2.0.1"

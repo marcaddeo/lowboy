@@ -60,56 +60,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "askama"
-version = "0.13.0"
-source = "git+https://github.com/djc/askama#a7e108cd76a2a89dfdf0dfb87b1286ec3a523f08"
-dependencies = [
- "askama_derive",
- "askama_escape",
- "humansize",
- "num-traits",
- "percent-encoding",
-]
-
-[[package]]
-name = "askama_axum"
-version = "0.5.0"
-source = "git+https://github.com/djc/askama#a7e108cd76a2a89dfdf0dfb87b1286ec3a523f08"
-dependencies = [
- "askama",
- "axum-core",
- "http 1.1.0",
-]
-
-[[package]]
-name = "askama_derive"
-version = "0.13.0"
-source = "git+https://github.com/djc/askama#a7e108cd76a2a89dfdf0dfb87b1286ec3a523f08"
-dependencies = [
- "askama_parser",
- "basic-toml",
- "mime",
- "mime_guess",
- "proc-macro2",
- "quote",
- "serde",
- "syn",
-]
-
-[[package]]
-name = "askama_escape"
-version = "0.11.0"
-source = "git+https://github.com/djc/askama#a7e108cd76a2a89dfdf0dfb87b1286ec3a523f08"
-
-[[package]]
-name = "askama_parser"
-version = "0.3.1"
-source = "git+https://github.com/djc/askama#a7e108cd76a2a89dfdf0dfb87b1286ec3a523f08"
-dependencies = [
- "nom",
-]
-
-[[package]]
 name = "async-stream"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -552,8 +502,6 @@ name = "demo"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "askama",
- "askama_axum",
  "async-stream",
  "async-trait",
  "axum",
@@ -580,6 +528,8 @@ dependencies = [
  "oauth2",
  "password-auth",
  "reqwest 0.12.9",
+ "rinja",
+ "rinja_axum",
  "rmp-serde",
  "serde",
  "thiserror 2.0.1",
@@ -593,7 +543,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "validator",
- "vergen-gitcl",
  "xdg",
 ]
 
@@ -799,6 +748,12 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "dyn-clone"
+version = "1.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
 name = "either"
@@ -1653,8 +1608,6 @@ name = "lowboy"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "askama",
- "askama_axum",
  "async-stream",
  "async-trait",
  "axum",
@@ -1672,6 +1625,7 @@ dependencies = [
  "diesel-async",
  "diesel_migrations",
  "dotenvy",
+ "dyn-clone",
  "fake",
  "flume",
  "futures",
@@ -1680,6 +1634,8 @@ dependencies = [
  "oauth2",
  "password-auth",
  "reqwest 0.12.9",
+ "rinja",
+ "rinja_axum",
  "rmp-serde",
  "serde",
  "thiserror 2.0.1",
@@ -2328,6 +2284,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "rinja"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3dc4940d00595430b3d7d5a01f6222b5e5b51395d1120bdb28d854bb8abb17a5"
+dependencies = [
+ "humansize",
+ "itoa",
+ "percent-encoding",
+ "rinja_derive",
+]
+
+[[package]]
+name = "rinja_axum"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc64d77bb950f6498d0fc64b028d168fcb4e56ac31b66a8ae05f64d3b0c218b6"
+dependencies = [
+ "axum-core",
+ "http 1.1.0",
+ "rinja",
+]
+
+[[package]]
+name = "rinja_derive"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d9ed0146aef6e2825f1b1515f074510549efba38d71f4554eec32eb36ba18b"
+dependencies = [
+ "basic-toml",
+ "memchr",
+ "mime",
+ "mime_guess",
+ "proc-macro2",
+ "quote",
+ "rinja_parser",
+ "rustc-hash",
+ "serde",
+ "syn",
+]
+
+[[package]]
+name = "rinja_parser"
+version = "0.3.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93f9a866e2e00a7a1fb27e46e9e324a6f7c0e7edc4543cae1d38f4e4a100c610"
+dependencies = [
+ "memchr",
+ "nom",
+ "serde",
+]
+
+[[package]]
 name = "rmp"
 version = "0.8.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2354,6 +2362,12 @@ name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
+
+[[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustix"

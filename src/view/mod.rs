@@ -1,74 +1,97 @@
-mod login;
-mod register;
-
-pub(crate) use login::*;
-pub(crate) use register::*;
-
-use crate::{auth::AuthSession, model, AppContext};
-use askama::Template;
+use crate::{
+    app,
+    auth::AuthSession,
+    model::{self, User},
+    AppContext,
+};
 use axum::{
     body::Body,
     extract::State,
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
 };
+use axum_messages::{Message, Messages};
+use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-#[derive(Template)]
-#[template(path = "layout.html")]
-pub struct LayoutTemplate {
-    content: String,
-    version_string: String,
-    user: Option<model::User>,
-    metadata: BTreeMap<String, String>,
-}
-
-pub async fn render_view<T: AppContext>(
-    State(context): State<T>,
+pub async fn render_view<App: app::App<AC>, AC: AppContext>(
+    State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
+    messages: Messages,
     response: Response,
 ) -> impl IntoResponse {
-    if let Some(RenderedTemplate(template)) = response.extensions().get::<RenderedTemplate>() {
+    if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await.unwrap();
         let user = if let Some(record) = user {
             Some(model::User::from_record(&record, &mut conn).await.unwrap())
         } else {
             None
         };
-        let version_string = env!("VERGEN_GIT_SHA").to_string();
+        let mut layout_context = LayoutContext::default();
 
-        let mut metadata: BTreeMap<String, String> = BTreeMap::new();
-        if let Some(ViewData(data)) = response.extensions().get::<ViewData>() {
-            metadata.append(&mut data.clone());
+        layout_context.insert(
+            "lowboy_version".to_string(),
+            env!("VERGEN_GIT_SHA").to_string(),
+        );
+
+        if let Some(LayoutContext(data)) = response.extensions().get::<LayoutContext>() {
+            layout_context.append(&mut data.clone());
         }
 
-        LayoutTemplate {
-            content: template.clone(),
-            version_string,
-            user,
-            metadata,
-        }
+        // @perf consider switching to .render() over .to_string()
+        // @see https://rinja.readthedocs.io/en/stable/performance.html
+        Html(
+            App::layout(&context)
+                .set_messages(messages.into_iter().collect())
+                .set_content(view.to_string())
+                .set_user(user)
+                .set_context(layout_context)
+                .to_string(),
+        )
         .into_response()
     } else {
         response
     }
 }
 
-#[derive(Clone)]
-pub struct ViewData(pub BTreeMap<String, String>);
+pub trait LowboyLayout: ToString + Default {
+    fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self;
+    fn set_content(&mut self, content: impl LowboyView) -> &mut Self;
+    fn set_context(&mut self, context: LayoutContext) -> &mut Self;
+    fn set_user(&mut self, user: Option<User>) -> &mut Self;
+}
 
-impl ViewData {
-    pub fn new() -> Self {
-        Self(BTreeMap::new())
+pub trait LowboyView: ToString + DynClone + Send + Sync {}
+dyn_clone::clone_trait_object!(LowboyView);
+
+impl<T: ToString + Clone + Send + Sync> LowboyView for T {}
+
+#[derive(Clone)]
+pub struct View<T: LowboyView>(pub T);
+
+#[derive(Clone)]
+pub struct ViewBox(pub Box<dyn LowboyView>);
+
+impl<T> IntoResponse for View<T>
+where
+    T: LowboyView + Send + Sync + Clone + 'static,
+{
+    fn into_response(self) -> Response {
+        let mut response = Response::new(Body::empty());
+        response.extensions_mut().insert(ViewBox(Box::new(self.0)));
+        response
     }
 }
 
-impl std::ops::DerefMut for ViewData {
+#[derive(Clone, Default)]
+pub struct LayoutContext(pub BTreeMap<String, String>);
+
+impl std::ops::DerefMut for LayoutContext {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-impl std::ops::Deref for ViewData {
+impl std::ops::Deref for LayoutContext {
     type Target = BTreeMap<String, String>;
 
     fn deref(&self) -> &Self::Target {
@@ -76,11 +99,26 @@ impl std::ops::Deref for ViewData {
     }
 }
 
+#[derive(Clone)]
+pub struct ViewWithContext<T: LowboyView>(pub T, pub LayoutContext);
+
+impl<T> IntoResponse for ViewWithContext<T>
+where
+    T: LowboyView + Send + Sync + Clone + 'static,
+{
+    fn into_response(self) -> Response {
+        let mut response = Response::new(Body::empty());
+        response.extensions_mut().insert(ViewBox(Box::new(self.0)));
+        response.extensions_mut().insert(self.1);
+        response
+    }
+}
+
 #[macro_export]
 macro_rules! view_data {
     ($($key:expr => $value:expr, )*) => {
         {
-            let mut _data = $crate::view::ViewData::new();
+            let mut _data = $crate::view::LayoutContext::default();
         $(
             let _ = _data.insert($key.to_string(), $value.to_string());
         )*
@@ -92,68 +130,12 @@ macro_rules! view_data {
 #[macro_export(local_inner_macros)]
 macro_rules! lowboy_view {
     ($template:expr , { $($data:tt)* }) => {
-        $crate::view::ViewWithData($template, view_data! { $($data)* })
+        $crate::view::ViewWithContext($template, view_data! { $($data)* })
     };
     ($template:expr, $data:expr) => {
-        $crate::view::ViewWithData($template, $data)
+        $crate::view::ViewWithContext($template, $data)
     };
     ($template:expr) => {
         $crate::view::View($template)
     };
-}
-
-pub trait LowboyView {
-    fn render(&self) -> String;
-}
-
-impl<T: ToString> LowboyView for T {
-    fn render(&self) -> String {
-        self.to_string()
-    }
-}
-
-#[derive(Clone)]
-pub struct View<T: LowboyView>(pub T);
-
-#[derive(Clone)]
-pub struct ViewWithData<T: LowboyView>(pub T, pub ViewData);
-
-#[derive(Clone)]
-struct RenderedTemplate(String);
-
-impl<T: LowboyView> View<T> {
-    fn render(&self) -> String {
-        self.0.render()
-    }
-}
-
-impl<T: LowboyView> ViewWithData<T> {
-    fn render(&self) -> String {
-        self.0.render()
-    }
-}
-
-impl<T> IntoResponse for View<T>
-where
-    T: LowboyView + Send + Sync + Clone + 'static,
-{
-    fn into_response(self) -> Response {
-        let mut response = Response::new(Body::empty());
-        let rendered = RenderedTemplate(self.render());
-        response.extensions_mut().insert(rendered);
-        response
-    }
-}
-
-impl<T> IntoResponse for ViewWithData<T>
-where
-    T: LowboyView + Send + Sync + Clone + 'static,
-{
-    fn into_response(self) -> Response {
-        let mut response = Response::new(Body::empty());
-        let rendered = RenderedTemplate(self.render());
-        response.extensions_mut().insert(rendered);
-        response.extensions_mut().insert(self.1);
-        response
-    }
 }

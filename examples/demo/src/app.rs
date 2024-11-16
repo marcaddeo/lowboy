@@ -1,4 +1,4 @@
-use crate::controller;
+use crate::{controller, view::Layout};
 use axum::{
     routing::{get, post},
     Router,
@@ -11,6 +11,7 @@ pub struct DemoContext {
     pub database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
     pub events: lowboy::Events,
     pub scheduler: tokio_cron_scheduler::JobScheduler,
+    #[allow(dead_code)]
     pub my_custom_thing: Vec<String>,
 }
 
@@ -46,6 +47,8 @@ impl Context for DemoContext {
 pub struct Demo;
 
 impl App<DemoContext> for Demo {
+    type Layout = Layout;
+
     fn name() -> &'static str {
         "demo"
     }
@@ -56,6 +59,12 @@ impl App<DemoContext> for Demo {
             .route("/", get(controller::home))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
+            .route("/register", get(controller::auth::register_form))
+            .route("/register", post(controller::auth::register))
+            .route("/login", get(controller::auth::form))
+            .route("/login", post(controller::auth::login))
+            .route("/login/oauth", get(controller::auth::oauth))
+            .route("/logout", get(controller::auth::logout))
     }
 }
 

@@ -1,9 +1,3 @@
-use crate::{
-    auth::AuthSession,
-    model::{CredentialKind, Credentials, OAuthCredentials, User},
-    view::{self, View},
-    AppContext,
-};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -13,11 +7,18 @@ use axum::{
 use axum_messages::Messages;
 use derive_masked::{DebugMasked, DisplayMasked};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+use lowboy::{
+    model::{CredentialKind, Credentials, OAuthCredentials, User},
+    view::View,
+    AuthSession,
+};
 use oauth2::CsrfToken;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 use tracing::warn;
 use validator::Validate;
+
+use crate::{app::DemoContext, view};
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
@@ -34,42 +35,30 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form(
-    messages: Messages,
-    Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
-    View(view::Login {
-        messages: messages.into_iter().collect(),
-        next,
-    })
+pub async fn form(Query(NextUrl { next }): Query<NextUrl>) -> impl IntoResponse {
+    View(view::Login { next })
 }
 
 pub async fn register_form(
     AuthSession { user, .. }: AuthSession,
     session: Session,
-    messages: Messages,
 ) -> impl IntoResponse {
     if user.is_some() {
         return Redirect::to("/").into_response();
     }
 
-    let form: RegistrationData = session
+    let form: RegisterForm = session
         .remove(REGISTRATION_FORM_KEY)
         .await
         .unwrap()
         .unwrap_or_default();
 
-    View(view::Register {
-        messages: messages.into_iter().collect(),
-        next: None,
-        form,
-    })
-    .into_response()
+    View(view::Register { next: None, form }).into_response()
 }
 
 // @TODO figure out how to put this validation just on the NewModelRecords
 #[derive(Clone, DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
-pub struct RegistrationData {
+pub struct RegisterForm {
     #[validate(length(min = 1))]
     pub name: String,
     #[validate(length(min = 1, max = 32))]
@@ -80,12 +69,12 @@ pub struct RegistrationData {
     password: String,
 }
 
-pub async fn register<T: AppContext>(
-    State(context): State<T>,
+pub async fn register(
+    State(context): State<DemoContext>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
-    Form(input): Form<RegistrationData>,
+    Form(input): Form<RegisterForm>,
 ) -> impl IntoResponse {
     if user.is_some() {
         return Redirect::to("/").into_response();
@@ -108,7 +97,7 @@ pub async fn register<T: AppContext>(
         return Redirect::to("/register").into_response();
     };
 
-    let mut conn = context.database().get().await.unwrap();
+    let mut conn = context.database.get().await.unwrap();
 
     let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
     let avatar = format!(
@@ -232,15 +221,8 @@ pub async fn oauth(
     let user = match auth_session.authenticate(credentials).await {
         Ok(Some(user)) => user,
         Ok(None) => {
-            let messages = messages.error("Invalid CSRF state");
-            return (
-                StatusCode::UNAUTHORIZED,
-                view::Login {
-                    messages: messages.into_iter().collect(),
-                    next: None,
-                },
-            )
-                .into_response();
+            messages.error("Invalid CSRF state");
+            return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };

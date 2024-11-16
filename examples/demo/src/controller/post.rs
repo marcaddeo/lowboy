@@ -1,7 +1,7 @@
 use crate::view;
 use crate::{app::DemoContext, model::Post};
 use axum::extract::{Form, State};
-use lowboy::{AuthSession, LowboyContext};
+use lowboy::AuthSession;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

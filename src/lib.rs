@@ -1,6 +1,5 @@
 use anyhow::Result;
 use axum::{
-    http::StatusCode,
     middleware,
     response::sse::Event,
     routing::{get, post},
@@ -91,16 +90,16 @@ impl<T: AppContext> Lowboy<T> {
             // Static assets.
             .nest_service("/static", ServeDir::new("static"))
             // Auth routes.
-            .route("/register", get(controller::auth::register_form))
-            .route("/register", post(controller::auth::register::<T>))
-            .route("/login", get(controller::auth::form))
-            .route("/login", post(controller::auth::login))
-            .route("/login/oauth", get(controller::auth::oauth))
-            .route("/logout", get(controller::auth::logout))
+            // .route("/register", get(controller::auth::register_form))
+            // .route("/register", post(controller::auth::register::<T>))
+            // .route("/login", get(controller::auth::form))
+            // .route("/login", post(controller::auth::login))
+            // .route("/login/oauth", get(controller::auth::oauth))
+            // .route("/logout", get(controller::auth::logout))
             .merge(app_routes)
             .layer(middleware::map_response_with_state(
                 self.context.clone(),
-                view::render_view::<T>,
+                view::render_view::<App, T>,
             ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer);
