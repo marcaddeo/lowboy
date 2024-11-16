@@ -38,8 +38,8 @@ pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 pub type Events = (Sender<Event>, Receiver<Event>);
 
 #[derive(Clone)]
-pub struct Lowboy<T: AppContext> {
-    context: T,
+pub struct Lowboy<AC: AppContext> {
+    context: AC,
 }
 
 impl<AC: AppContext> Lowboy<AC> {
@@ -162,14 +162,14 @@ pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
 // }
 
 #[cfg(debug_assertions)]
-fn not_htmx_predicate<T>(req: &axum::extract::Request<T>) -> bool {
+fn not_htmx_predicate(req: &axum::extract::Request) -> bool {
     !req.headers().contains_key("hx-request")
 }
 
 #[cfg(debug_assertions)]
-fn livereload<T: AppContext>(
-    router: axum::Router<T>,
-) -> Result<(axum::Router<T>, notify::FsEventWatcher)> {
+fn livereload<AC: AppContext>(
+    router: axum::Router<AC>,
+) -> Result<(axum::Router<AC>, notify::FsEventWatcher)> {
     use notify::Watcher;
 
     let livereload = tower_livereload::LiveReloadLayer::new();
