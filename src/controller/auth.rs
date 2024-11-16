@@ -2,27 +2,39 @@ use axum::{
     extract::{Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
-    Form,
+    routing::{get, post},
+    Form, Router,
 };
 use axum_messages::Messages;
 use derive_masked::{DebugMasked, DisplayMasked};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
-use lowboy::{
-    model::{CredentialKind, Credentials, OAuthCredentials, User},
-    view::View,
-    AuthSession,
-};
 use oauth2::CsrfToken;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 use tracing::warn;
 use validator::Validate;
 
-use crate::{app::DemoContext, view};
+use crate::{
+    app,
+    auth::{LowboyLoginView as _, LowboyRegisterView},
+    model::{CredentialKind, Credentials, OAuthCredentials, User},
+    view::View,
+    AppContext, AuthSession,
+};
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
 const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
+
+pub fn routes<App: app::App<AC>, AC: AppContext>() -> Router<AC> {
+    Router::new()
+        .route("/register", get(register_form::<App, AC>))
+        .route("/register", post(register::<AC>))
+        .route("/login", get(form::<App, AC>))
+        .route("/login", post(login))
+        .route("/login/oauth", get(oauth))
+        .route("/logout", get(logout))
+}
 
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
@@ -35,11 +47,15 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form(Query(NextUrl { next }): Query<NextUrl>) -> impl IntoResponse {
-    View(view::Login { next })
+pub async fn form<App: app::App<AC>, AC: AppContext>(
+    State(context): State<AC>,
+    Query(NextUrl { next }): Query<NextUrl>,
+) -> impl IntoResponse {
+    View(App::login_view(&context).set_next(next).clone())
 }
 
-pub async fn register_form(
+pub async fn register_form<App: app::App<AC>, AC: AppContext>(
+    State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
 ) -> impl IntoResponse {
@@ -53,7 +69,7 @@ pub async fn register_form(
         .unwrap()
         .unwrap_or_default();
 
-    View(view::Register { next: None, form }).into_response()
+    View(App::register_view(&context).set_form(form).clone()).into_response()
 }
 
 // @TODO figure out how to put this validation just on the NewModelRecords
@@ -69,8 +85,8 @@ pub struct RegisterForm {
     password: String,
 }
 
-pub async fn register(
-    State(context): State<DemoContext>,
+pub async fn register<AC: AppContext>(
+    State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
@@ -97,7 +113,7 @@ pub async fn register(
         return Redirect::to("/register").into_response();
     };
 
-    let mut conn = context.database.get().await.unwrap();
+    let mut conn = context.database().get().await.unwrap();
 
     let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
     let avatar = format!(
@@ -222,7 +238,8 @@ pub async fn oauth(
         Ok(Some(user)) => user,
         Ok(None) => {
             messages.error("Invalid CSRF state");
-            return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
+            // return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
+            return (StatusCode::UNAUTHORIZED, "").into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };

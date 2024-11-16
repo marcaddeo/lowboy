@@ -1,3 +1,4 @@
+{% import "components/alerts.html" as alerts %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -12,6 +13,7 @@
   <body class="flex flex-col h-screen bg-surface dark:bg-surfaceDark">
     {% include "components/header.html" %}
     <main class="mb-auto px-36">
+      {% call alerts::alerts(messages) %}
       {% block content %}{{ content|safe }}{% endblock %}
     </main>
     {% include "components/footer.html" %}

@@ -1,10 +1,5 @@
 use anyhow::Result;
-use axum::{
-    middleware,
-    response::sse::Event,
-    routing::{get, post},
-    Router,
-};
+use axum::{middleware, response::sse::Event, routing::get, Router};
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -25,9 +20,9 @@ use tower_sessions::cookie::{self, Key};
 use tracing::{info, warn};
 
 mod app;
-mod auth;
+pub mod auth;
 mod context;
-mod controller;
+pub mod controller;
 mod diesel_sqlite_session_store;
 pub mod model;
 mod schema;
@@ -43,18 +38,18 @@ pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 pub type Events = (Sender<Event>, Receiver<Event>);
 
 #[derive(Clone)]
-pub struct Lowboy<T: AppContext> {
-    context: T,
+pub struct Lowboy<AC: AppContext> {
+    context: AC,
 }
 
-impl<T: AppContext> Lowboy<T> {
+impl<AC: AppContext> Lowboy<AC> {
     pub async fn boot() -> Self {
         let context = create_context().await.unwrap();
 
         Self { context }
     }
 
-    pub async fn serve<App: app::App<T>>(self) -> Result<()> {
+    pub async fn serve<App: app::App<AC>>(self) -> Result<()> {
         let session_store = DieselSqliteSessionStore::new(self.context.database().clone());
         session_store.migrate().await?;
 
@@ -80,26 +75,18 @@ impl<T: AppContext> Lowboy<T> {
         let lowboy_auth = LowboyAuth::new(self.context.database().clone())?;
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
-        let app_routes = App::routes();
-
         let router = Router::new()
             // App routes.
-            .route("/events", get(controller::events::<T>))
+            .route("/events", get(controller::events::<AC>))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
             // Static assets.
             .nest_service("/static", ServeDir::new("static"))
-            // Auth routes.
-            // .route("/register", get(controller::auth::register_form))
-            // .route("/register", post(controller::auth::register::<T>))
-            // .route("/login", get(controller::auth::form))
-            // .route("/login", post(controller::auth::login))
-            // .route("/login/oauth", get(controller::auth::oauth))
-            // .route("/logout", get(controller::auth::logout))
-            .merge(app_routes)
+            .merge(App::routes())
+            .merge(App::auth_routes::<App>())
             .layer(middleware::map_response_with_state(
                 self.context.clone(),
-                view::render_view::<App, T>,
+                view::render_view::<App, AC>,
             ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer);
@@ -175,14 +162,14 @@ pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
 // }
 
 #[cfg(debug_assertions)]
-fn not_htmx_predicate<T>(req: &axum::extract::Request<T>) -> bool {
+fn not_htmx_predicate(req: &axum::extract::Request) -> bool {
     !req.headers().contains_key("hx-request")
 }
 
 #[cfg(debug_assertions)]
-fn livereload<T: AppContext>(
-    router: axum::Router<T>,
-) -> Result<(axum::Router<T>, notify::FsEventWatcher)> {
+fn livereload<AC: AppContext>(
+    router: axum::Router<AC>,
+) -> Result<(axum::Router<AC>, notify::FsEventWatcher)> {
     use notify::Watcher;
 
     let livereload = tower_livereload::LiveReloadLayer::new();

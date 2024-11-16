@@ -1,5 +1,7 @@
 use crate::{
+    controller::auth::RegisterForm,
     model::{CredentialKind, Credentials, NewUserRecord, User, UserRecord},
+    view::LowboyView,
     Connection, Pool,
 };
 use anyhow::Result;
@@ -16,6 +18,15 @@ use password_auth::verify_password;
 use serde::Deserialize;
 
 pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
+
+pub trait LowboyRegisterView: LowboyView + Default + Clone {
+    fn set_next(&mut self, next: Option<String>) -> &mut Self;
+    fn set_form(&mut self, form: RegisterForm) -> &mut Self;
+}
+
+pub trait LowboyLoginView: LowboyView + Default + Clone {
+    fn set_next(&mut self, next: Option<String>) -> &mut Self;
+}
 
 #[derive(Clone)]
 pub struct LowboyAuth {
