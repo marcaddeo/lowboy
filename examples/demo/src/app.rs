@@ -56,6 +56,12 @@ impl App<DemoContext> for Demo {
             .route("/", get(controller::home))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
+            .route("/register", get(controller::auth::register_form))
+            .route("/register", post(controller::auth::register))
+            .route("/login", get(controller::auth::form))
+            .route("/login", post(controller::auth::login))
+            .route("/login/oauth", get(controller::auth::oauth))
+            .route("/logout", get(controller::auth::logout))
     }
 }
 

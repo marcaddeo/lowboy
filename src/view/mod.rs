@@ -8,14 +8,6 @@ use axum_messages::Messages;
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-mod layout;
-mod login;
-mod register;
-
-pub(crate) use layout::*;
-pub(crate) use login::*;
-pub(crate) use register::*;
-
 pub async fn render_view<T: AppContext>(
     State(context): State<T>,
     AuthSession { user, .. }: AuthSession,
@@ -36,14 +28,15 @@ pub async fn render_view<T: AppContext>(
             context.append(&mut data.clone());
         }
 
-        Layout {
-            messages: messages.into_iter().collect(),
-            content: view.to_string(),
-            version_string,
-            user,
-            context,
-        }
-        .into_response()
+        ().into_response()
+        // Layout {
+        //     messages: messages.into_iter().collect(),
+        //     content: view.to_string(),
+        //     version_string,
+        //     user,
+        //     context,
+        // }
+        // .into_response()
     } else {
         response
     }

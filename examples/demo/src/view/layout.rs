@@ -1,6 +1,5 @@
-use super::LayoutContext;
-use crate::model::User;
 use axum_messages::Message;
+use lowboy::{model::User, view::LayoutContext};
 use rinja::Template;
 
 #[derive(Template)]

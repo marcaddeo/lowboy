@@ -1,9 +1,3 @@
-use crate::{
-    auth::AuthSession,
-    model::{CredentialKind, Credentials, OAuthCredentials, User},
-    view::{self, View},
-    AppContext,
-};
 use axum::{
     extract::{Query, State},
     http::StatusCode,
@@ -13,11 +7,18 @@ use axum::{
 use axum_messages::Messages;
 use derive_masked::{DebugMasked, DisplayMasked};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+use lowboy::{
+    model::{CredentialKind, Credentials, OAuthCredentials, User},
+    view::View,
+    AppContext, AuthSession,
+};
 use oauth2::CsrfToken;
 use serde::{Deserialize, Serialize};
 use tower_sessions::Session;
 use tracing::warn;
 use validator::Validate;
+
+use crate::{app::DemoContext, view};
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
@@ -68,8 +69,8 @@ pub struct RegisterForm {
     password: String,
 }
 
-pub async fn register<T: AppContext>(
-    State(context): State<T>,
+pub async fn register(
+    State(context): State<DemoContext>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
@@ -96,7 +97,7 @@ pub async fn register<T: AppContext>(
         return Redirect::to("/register").into_response();
     };
 
-    let mut conn = context.database().get().await.unwrap();
+    let mut conn = context.database.get().await.unwrap();
 
     let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
     let avatar = format!(
