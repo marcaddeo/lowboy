@@ -54,7 +54,7 @@ impl<T: AppContext> Lowboy<T> {
         Self { context }
     }
 
-    pub async fn serve<App: app::App<T>>(self) -> Result<()> {
+    pub async fn serve<App: app::App<T> + 'static>(self) -> Result<()> {
         let session_store = DieselSqliteSessionStore::new(self.context.database().clone());
         session_store.migrate().await?;
 
@@ -99,7 +99,7 @@ impl<T: AppContext> Lowboy<T> {
             .merge(app_routes)
             .layer(middleware::map_response_with_state(
                 self.context.clone(),
-                view::render_view::<T>,
+                view::render_view::<App, T>,
             ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer);

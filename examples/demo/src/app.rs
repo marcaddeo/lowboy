@@ -1,4 +1,4 @@
-use crate::controller;
+use crate::{controller, view::Layout};
 use axum::{
     routing::{get, post},
     Router,
@@ -62,6 +62,10 @@ impl App<DemoContext> for Demo {
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
+    }
+
+    fn layout(_context: &DemoContext) -> impl lowboy::view::LowboyLayout {
+        Layout::default()
     }
 }
 

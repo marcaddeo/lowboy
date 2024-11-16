@@ -1,15 +1,20 @@
-use crate::{auth::AuthSession, model, AppContext};
+use crate::{
+    app,
+    auth::AuthSession,
+    model::{self, User},
+    AppContext,
+};
 use axum::{
     body::Body,
     extract::State,
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
 };
-use axum_messages::Messages;
+use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-pub async fn render_view<T: AppContext>(
-    State(context): State<T>,
+pub async fn render_view<App: app::App<AC>, AC: AppContext>(
+    State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     messages: Messages,
     response: Response,
@@ -21,25 +26,36 @@ pub async fn render_view<T: AppContext>(
         } else {
             None
         };
-        let version_string = env!("VERGEN_GIT_SHA").to_string();
+        let mut layout_context = LayoutContext::default();
 
-        let mut context = LayoutContext::default();
+        layout_context.insert(
+            "lowboy_version".to_string(),
+            env!("VERGEN_GIT_SHA").to_string(),
+        );
+
         if let Some(LayoutContext(data)) = response.extensions().get::<LayoutContext>() {
-            context.append(&mut data.clone());
+            layout_context.append(&mut data.clone());
         }
 
-        ().into_response()
-        // Layout {
-        //     messages: messages.into_iter().collect(),
-        //     content: view.to_string(),
-        //     version_string,
-        //     user,
-        //     context,
-        // }
-        // .into_response()
+        Html(
+            App::layout(&context)
+                .set_messages(messages.into_iter().collect())
+                .set_content(view.to_string())
+                .set_user(user)
+                .set_context(layout_context)
+                .to_string(),
+        )
+        .into_response()
     } else {
         response
     }
+}
+
+pub trait LowboyLayout: ToString + Default {
+    fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self;
+    fn set_content(&mut self, content: impl LowboyView) -> &mut Self;
+    fn set_context(&mut self, context: LayoutContext) -> &mut Self;
+    fn set_user(&mut self, user: Option<User>) -> &mut Self;
 }
 
 pub trait LowboyView: ToString + DynClone + Send + Sync {}
