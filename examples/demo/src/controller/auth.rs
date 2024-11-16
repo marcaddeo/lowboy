@@ -10,7 +10,7 @@ use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use lowboy::{
     model::{CredentialKind, Credentials, OAuthCredentials, User},
     view::View,
-    AppContext, AuthSession,
+    AuthSession,
 };
 use oauth2::CsrfToken;
 use serde::{Deserialize, Serialize};

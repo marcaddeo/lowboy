@@ -11,6 +11,7 @@ pub struct DemoContext {
     pub database: diesel_async::pooled_connection::deadpool::Pool<lowboy::Connection>,
     pub events: lowboy::Events,
     pub scheduler: tokio_cron_scheduler::JobScheduler,
+    #[allow(dead_code)]
     pub my_custom_thing: Vec<String>,
 }
 
@@ -46,6 +47,8 @@ impl Context for DemoContext {
 pub struct Demo;
 
 impl App<DemoContext> for Demo {
+    type Layout = Layout;
+
     fn name() -> &'static str {
         "demo"
     }
@@ -62,10 +65,6 @@ impl App<DemoContext> for Demo {
             .route("/login", post(controller::auth::login))
             .route("/login/oauth", get(controller::auth::oauth))
             .route("/logout", get(controller::auth::logout))
-    }
-
-    fn layout(_context: &DemoContext) -> impl lowboy::view::LowboyLayout {
-        Layout::default()
     }
 }
 
