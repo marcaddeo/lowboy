@@ -1,4 +1,10 @@
-use crate::{controller, view::Layout};
+use crate::{
+    controller,
+    view::{
+        auth::{Login, Register},
+        Layout,
+    },
+};
 use axum::{
     routing::{get, post},
     Router,
@@ -50,6 +56,8 @@ pub struct Demo;
 
 impl App<DemoContext> for Demo {
     type Layout = Layout;
+    type RegisterView = Register;
+    type LoginView = Login;
 
     fn name() -> &'static str {
         "demo"
@@ -57,16 +65,10 @@ impl App<DemoContext> for Demo {
 
     fn routes() -> Router<DemoContext> {
         Router::new()
-            .route("/post", post(controller::post::create))
             .route("/", get(controller::home))
+            .route("/post", post(controller::post::create))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
-            .route("/register", get(controller::auth::register_form))
-            .route("/register", post(controller::auth::register))
-            .route("/login", get(controller::auth::form))
-            .route("/login", post(controller::auth::login))
-            .route("/login/oauth", get(controller::auth::oauth))
-            .route("/logout", get(controller::auth::logout))
     }
 }
 
