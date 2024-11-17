@@ -142,7 +142,7 @@ macro_rules! internal_record {
         ()
         -> { $(#[$attr:meta])* $pub:vis $model:ident $(($field_vis:vis $field:ident : $type:ty))* }
         [$(($from:ident : $from_type:ty))*]
-        [$(($from_related: ident: $from_related_model:ty))*]
+        [$(($from_related: ident : $from_related_model:ty))*]
     ) => {
         paste! {
             // ModelRecord
@@ -428,8 +428,9 @@ macro_rules! internal_impl {
                 #[doc = "Create a `" $model "` object from a `" [<$model Record>] "`"]
                 #[doc = "This will also load child models, excluding one-to-many children."]
                 pub async fn from_record(record: &[<$model Record>], conn: &mut Connection) -> QueryResult<Self> {
+                    use diesel::associations::HasTable as _;
                     $(
-                        let $key: [<$foreign_model Record>] = crate::schema::[<$foreign_model:snake>]::table
+                        let $key: [<$foreign_model Record>] = [<$foreign_model Record>]::table()
                             .find(record.$foreign_key)
                             .first(conn)
                             .await?;

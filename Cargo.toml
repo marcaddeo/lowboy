@@ -32,7 +32,6 @@ diesel = { version = "2.2.4", features = [
     "chrono",
 ] }
 diesel-async = { version = "0.5.1", features = ["deadpool", "pool", "sqlite"] }
-diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 dotenvy = { git = "https://github.com/allan2/dotenvy", features = ["macros"] }
 dyn-clone = "1.0.17"
 fake = { version = "3.0.0", features = ["derive"] }

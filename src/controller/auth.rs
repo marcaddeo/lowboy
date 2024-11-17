@@ -16,8 +16,8 @@ use validator::Validate;
 
 use crate::{
     app,
-    auth::{LowboyLoginView as _, LowboyRegisterView},
-    model::{CredentialKind, Credentials, NewUserRecord, OAuthCredentials},
+    auth::{LowboyLoginView as _, LowboyRegisterView, RegistrationDetails},
+    model::{CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation},
     view::View,
     AppContext, AuthSession,
 };
@@ -26,7 +26,7 @@ const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
 const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
 
-pub fn routes<App: app::App<AC>, AC: AppContext>() -> Router<AC> {
+pub fn routes<App: app::App<AC>, AC: AppContext + Clone>() -> Router<AC> {
     Router::new()
         .route("/register", get(register_form::<App, AC>))
         .route("/register", post(register::<AC>))
@@ -47,14 +47,14 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form<App: app::App<AC>, AC: AppContext>(
+pub async fn form<App: app::App<AC>, AC: AppContext + Clone>(
     State(context): State<AC>,
     Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
     View(App::login_view(&context).set_next(next).clone())
 }
 
-pub async fn register_form<App: app::App<AC>, AC: AppContext>(
+pub async fn register_form<App: app::App<AC>, AC: AppContext + Clone>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
@@ -115,16 +115,12 @@ pub async fn register<AC: AppContext>(
 
     let mut conn = context.database().get().await.unwrap();
 
-    let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
-    let avatar = format!(
-        "https://avatar.iran.liara.run/username?username={}+{}",
-        first_name, last_name
-    );
     let password = password_auth::generate_hash(&input.password);
-    let new_user = NewUserRecord::new(&input.username, &input.email).with_password(Some(&password));
-    let user = new_user.create_or_update(&mut conn).await;
+    let new_user =
+        NewLowboyUserRecord::new(&input.username, &input.email).with_password(Some(&password));
+    let res = new_user.create_or_update(&mut conn).await;
 
-    match user {
+    match res {
         Ok(_) => messages.success("Registration successful! You can now log in."),
         Err(DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
             messages.error("A user with the same username or email already exists")
@@ -132,10 +128,17 @@ pub async fn register<AC: AppContext>(
         Err(_) => messages.error("An unknown error occurred"),
     };
 
-    if user.is_err() {
+    if res.is_err() {
         session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
         Redirect::to("/register")
     } else {
+        if let (user, Operation::Create) = res.unwrap() {
+            context
+                .on_new_user(&user, RegistrationDetails::Local(input.clone()))
+                .await
+                .unwrap();
+        }
+
         Redirect::to("/login")
     }
     .into_response()

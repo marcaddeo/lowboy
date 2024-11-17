@@ -1,15 +1,7 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    post (id) {
-        id -> Integer,
-        user_id -> Integer,
-        content -> Text,
-    }
-}
-
-diesel::table! {
-    user (id) {
+    lowboy_user (id) {
         id -> Integer,
         username -> Text,
         email -> Text,
@@ -19,9 +11,25 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_data (id) {
+    post (id) {
         id -> Integer,
         user_id -> Integer,
+        content -> Text,
+    }
+}
+
+diesel::table! {
+    tower_sessions (id) {
+        id -> Text,
+        data -> Binary,
+        expiry_date -> Integer,
+    }
+}
+
+diesel::table! {
+    user (id) {
+        id -> Integer,
+        lowboy_user_id -> Integer,
         name -> Text,
         avatar -> Nullable<Text>,
         byline -> Nullable<Text>,
@@ -29,7 +37,8 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    lowboy_user,
     post,
+    tower_sessions,
     user,
-    user_data,
 );

@@ -1,8 +1,10 @@
 use crate::{
     controller::auth::RegisterForm,
-    model::{CredentialKind, Credentials, NewUserRecord, User, UserRecord},
+    model::{
+        CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
+    },
     view::LowboyView,
-    Connection, Pool,
+    AppContext, Connection, Pool,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -28,14 +30,20 @@ pub trait LowboyLoginView: LowboyView + Default + Clone {
     fn set_next(&mut self, next: Option<String>) -> &mut Self;
 }
 
+pub enum RegistrationDetails {
+    GitHub(GitHubUserInfo),
+    Local(RegisterForm),
+}
+
 #[derive(Clone)]
 pub struct LowboyAuth {
     pub oauth: BasicClient,
     pub database: Pool<Connection>,
+    pub context: Box<dyn AppContext>,
 }
 
 impl LowboyAuth {
-    pub fn new(database: Pool<Connection>) -> Result<Self> {
+    pub fn new(database: Pool<Connection>, context: Box<dyn AppContext>) -> Result<Self> {
         let client_id = std::env::var("CLIENT_ID")
             .map(ClientId::new)
             .expect("CLIENT_ID should be provided.");
@@ -47,7 +55,11 @@ impl LowboyAuth {
         let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?;
         let oauth = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url));
 
-        Ok(Self { oauth, database })
+        Ok(Self {
+            oauth,
+            database,
+            context,
+        })
     }
 
     pub fn authorize_url(&self) -> (Url, CsrfToken) {
@@ -83,7 +95,7 @@ pub struct GitHubUserInfo {
 
 #[async_trait]
 impl AuthnBackend for LowboyAuth {
-    type User = UserRecord;
+    type User = LowboyUserRecord;
     type Credentials = Credentials;
     type Error = Error;
 
@@ -98,8 +110,9 @@ impl AuthnBackend for LowboyAuth {
                 let credentials = credentials
                     .password
                     .expect("CredentialKind::Password password field should not be none");
-                let user = User::find_by_username_having_password(&credentials.username, &mut conn)
-                    .await?;
+                let user =
+                    LowboyUser::find_by_username_having_password(&credentials.username, &mut conn)
+                        .await?;
 
                 tokio::task::spawn_blocking(|| {
                     Ok(verify_password(
@@ -145,13 +158,20 @@ impl AuthnBackend for LowboyAuth {
 
                 // Persist user in our database so we can use `get_user`.
                 let access_token = token_res.access_token().secret();
-                let new_user = NewUserRecord {
+                let new_user = NewLowboyUserRecord {
                     username: &user_info.login,
                     email: &user_info.email,
                     password: None,
                     access_token: Some(access_token),
                 };
-                let record = new_user.create_or_update(&mut conn).await?;
+                let (record, operation) = new_user.create_or_update(&mut conn).await?;
+
+                if operation == Operation::Create {
+                    self.context
+                        .on_new_user(&record, RegistrationDetails::GitHub(user_info))
+                        .await
+                        .unwrap();
+                }
 
                 Ok(Some(record))
             }
@@ -163,6 +183,6 @@ impl AuthnBackend for LowboyAuth {
         user_id: &axum_login::UserId<Self>,
     ) -> Result<Option<Self::User>, Self::Error> {
         let mut conn = self.database.get().await?;
-        Ok(Some(User::find(*user_id, &mut conn).await?.into()))
+        Ok(Some(LowboyUser::find(*user_id, &mut conn).await?.into()))
     }
 }

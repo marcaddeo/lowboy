@@ -4,10 +4,11 @@ use diesel::sqlite::SqliteConnection;
 use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use dyn_clone::DynClone;
 use flume::{Receiver, Sender};
 use tokio_cron_scheduler::JobScheduler;
 
-use crate::{Connection, Events};
+use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
 
 pub trait Context: Send + Sync + 'static {
     fn database(&self) -> &Pool<Connection>;
@@ -15,9 +16,22 @@ pub trait Context: Send + Sync + 'static {
     fn scheduler(&self) -> &JobScheduler;
 }
 
-pub trait AppContext: Context + Clone {
-    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>;
+#[allow(unused_variables)]
+#[async_trait::async_trait]
+pub trait AppContext: Context + DynClone {
+    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>
+    where
+        Self: Sized;
+
+    async fn on_new_user(
+        &self,
+        record: &LowboyUserRecord,
+        details: RegistrationDetails,
+    ) -> Result<()> {
+        Ok(())
+    }
 }
+dyn_clone::clone_trait_object!(AppContext);
 
 #[derive(Clone)]
 pub struct LowboyContext {

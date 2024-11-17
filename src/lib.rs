@@ -42,7 +42,7 @@ pub struct Lowboy<AC: AppContext> {
     context: AC,
 }
 
-impl<AC: AppContext> Lowboy<AC> {
+impl<AC: AppContext + Clone> Lowboy<AC> {
     pub async fn boot() -> Self {
         let context = create_context().await.unwrap();
 
@@ -72,7 +72,10 @@ impl<AC: AppContext> Lowboy<AC> {
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
             .with_signed(session_key);
 
-        let lowboy_auth = LowboyAuth::new(self.context.database().clone())?;
+        let lowboy_auth = LowboyAuth::new(
+            self.context.database().clone(),
+            Box::new(self.context.clone()),
+        )?;
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let router = Router::new()
@@ -167,7 +170,7 @@ fn not_htmx_predicate(req: &axum::extract::Request) -> bool {
 }
 
 #[cfg(debug_assertions)]
-fn livereload<AC: AppContext>(
+fn livereload<AC: AppContext + Clone>(
     router: axum::Router<AC>,
 ) -> Result<(axum::Router<AC>, notify::FsEventWatcher)> {
     use notify::Watcher;

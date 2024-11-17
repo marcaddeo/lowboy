@@ -1,7 +1,7 @@
 use crate::{
     app,
     auth::AuthSession,
-    model::{FromRecord as _, LowboyUser, UserRecord},
+    model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
     AppContext,
 };
 use axum::{
@@ -13,7 +13,7 @@ use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-pub async fn render_view<App: app::App<AC>, AC: AppContext>(
+pub async fn render_view<App: app::App<AC>, AC: AppContext + Clone>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     messages: Messages,
@@ -22,9 +22,6 @@ pub async fn render_view<App: app::App<AC>, AC: AppContext>(
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await.unwrap();
         let user = if let Some(record) = user {
-            // This is "holding across await?" !Send??? idk
-            // the connection is the issue, but i can't seem to make this send the context over
-            // either.
             Some(App::User::from_record(&record, &mut conn).await.unwrap())
         } else {
             None
@@ -56,7 +53,7 @@ pub async fn render_view<App: app::App<AC>, AC: AppContext>(
     }
 }
 
-pub trait LowboyLayout<T: LowboyUser<UserRecord>>: ToString + Default {
+pub trait LowboyLayout<T: LowboyUserTrait<LowboyUserRecord>>: ToString + Default {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self;
     fn set_content(&mut self, content: impl LowboyView) -> &mut Self;
     fn set_context(&mut self, context: LayoutContext) -> &mut Self;
