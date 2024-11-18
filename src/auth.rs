@@ -4,7 +4,7 @@ use crate::{
         CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
     },
     view::LowboyView,
-    AppContext, Connection, Pool,
+    AppContext,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -38,12 +38,11 @@ pub enum RegistrationDetails {
 #[derive(Clone)]
 pub struct LowboyAuth {
     pub oauth: BasicClient,
-    pub database: Pool<Connection>,
     pub context: Box<dyn AppContext>,
 }
 
 impl LowboyAuth {
-    pub fn new(database: Pool<Connection>, context: Box<dyn AppContext>) -> Result<Self> {
+    pub fn new(context: Box<dyn AppContext>) -> Result<Self> {
         let client_id = std::env::var("CLIENT_ID")
             .map(ClientId::new)
             .expect("CLIENT_ID should be provided.");
@@ -55,11 +54,7 @@ impl LowboyAuth {
         let token_url = TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?;
         let oauth = BasicClient::new(client_id, Some(client_secret), auth_url, Some(token_url));
 
-        Ok(Self {
-            oauth,
-            database,
-            context,
-        })
+        Ok(Self { oauth, context })
     }
 
     pub fn authorize_url(&self) -> (Url, CsrfToken) {
@@ -103,7 +98,7 @@ impl AuthnBackend for LowboyAuth {
         &self,
         credentials: Self::Credentials,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let mut conn = self.database.get().await?;
+        let mut conn = self.context.database().get().await?;
 
         match credentials.kind {
             CredentialKind::Password => {
@@ -182,7 +177,7 @@ impl AuthnBackend for LowboyAuth {
         &self,
         user_id: &axum_login::UserId<Self>,
     ) -> Result<Option<Self::User>, Self::Error> {
-        let mut conn = self.database.get().await?;
+        let mut conn = self.context.database().get().await?;
         Ok(Some(LowboyUser::find(*user_id, &mut conn).await?.into()))
     }
 }

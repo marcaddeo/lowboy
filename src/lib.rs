@@ -9,7 +9,6 @@ use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
 use context::create_context;
 use diesel::sqlite::SqliteConnection;
-use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_sqlite_session_store::DieselSqliteSessionStore;
 use flume::{Receiver, Sender};
@@ -72,10 +71,7 @@ impl<AC: AppContext + Clone> Lowboy<AC> {
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
             .with_signed(session_key);
 
-        let lowboy_auth = LowboyAuth::new(
-            self.context.database().clone(),
-            Box::new(self.context.clone()),
-        )?;
+        let lowboy_auth = LowboyAuth::new(Box::new(self.context.clone()))?;
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let router = Router::new()
