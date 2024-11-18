@@ -17,6 +17,7 @@ use validator::Validate;
 use crate::{
     app,
     auth::{LowboyLoginView as _, LowboyRegisterView, RegistrationDetails},
+    context::CloneableAppContext,
     model::{CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation},
     view::View,
     AppContext, AuthSession,
@@ -26,7 +27,7 @@ const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
 const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
 
-pub fn routes<App: app::App<AC>, AC: AppContext + Clone>() -> Router<AC> {
+pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
     Router::new()
         .route("/register", get(register_form::<App, AC>))
         .route("/register", post(register::<AC>))
@@ -47,14 +48,14 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form<App: app::App<AC>, AC: AppContext + Clone>(
+pub async fn form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
     View(App::login_view(&context).set_next(next).clone())
 }
 
-pub async fn register_form<App: app::App<AC>, AC: AppContext + Clone>(
+pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,

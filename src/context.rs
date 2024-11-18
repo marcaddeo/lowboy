@@ -33,6 +33,9 @@ pub trait AppContext: Context + DynClone {
 }
 dyn_clone::clone_trait_object!(AppContext);
 
+pub trait CloneableAppContext: AppContext + Clone {}
+impl<T: AppContext + Clone> CloneableAppContext for T {}
+
 #[derive(Clone)]
 pub struct LowboyContext {
     pub database: Pool<SyncConnectionWrapper<SqliteConnection>>,

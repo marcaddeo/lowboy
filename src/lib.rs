@@ -7,7 +7,7 @@ use axum_login::{
 };
 use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
-use context::create_context;
+use context::{create_context, CloneableAppContext};
 use diesel::{
     sqlite::{Sqlite, SqliteConnection},
     QueryResult,
@@ -67,7 +67,7 @@ impl std::io::Write for MigrationWriter {
     }
 }
 
-impl<AC: AppContext + Clone> Lowboy<AC> {
+impl<AC: CloneableAppContext> Lowboy<AC> {
     pub async fn boot() -> Self {
         let context = create_context::<AC>().await.unwrap();
 
@@ -204,7 +204,7 @@ fn not_htmx_predicate(req: &axum::extract::Request) -> bool {
 }
 
 #[cfg(debug_assertions)]
-fn livereload<AC: AppContext + Clone>(
+fn livereload<AC: CloneableAppContext>(
     router: axum::Router<AC>,
 ) -> Result<(axum::Router<AC>, notify::FsEventWatcher)> {
     use notify::Watcher;

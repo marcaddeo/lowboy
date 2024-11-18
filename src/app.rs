@@ -1,6 +1,6 @@
 use crate::{
     auth::{LowboyLoginView, LowboyRegisterView},
-    context::AppContext,
+    context::CloneableAppContext,
     controller,
     model::{LowboyUserRecord, LowboyUserTrait},
     view::LowboyLayout,
@@ -8,7 +8,7 @@ use crate::{
 use axum::Router;
 
 #[allow(unused_variables)]
-pub trait App<AC: AppContext + Clone>: Send + 'static {
+pub trait App<AC: CloneableAppContext>: Send + 'static {
     type Layout: LowboyLayout<Self::User>;
     type RegisterView: LowboyRegisterView;
     type LoginView: LowboyLoginView;

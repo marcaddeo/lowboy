@@ -1,8 +1,8 @@
 use crate::{
     app,
     auth::AuthSession,
+    context::CloneableAppContext,
     model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
-    AppContext,
 };
 use axum::{
     body::Body,
@@ -13,7 +13,7 @@ use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-pub async fn render_view<App: app::App<AC>, AC: AppContext + Clone>(
+pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     messages: Messages,
