@@ -33,7 +33,7 @@
       {% if let Some(avatar) = user.avatar() %}
         <img src="{{ avatar }}" alt="User Profile" class="size-10 rounded-full object-cover" />
       {% else %}
-        <img src="" alt="User Profile" class="size-10 rounded-full object-cover" />
+        <img src="{{ user.gravatar() }}" alt="User Profile" class="size-10 rounded-full object-cover" />
       {% endif %}
       </button>
       <!-- User Dropdown -->
@@ -66,7 +66,7 @@
       {% if let Some(avatar) = user.avatar() %}
         <img src="{{ avatar }}" alt="User Profile" class="size-12 rounded-full object-cover" />
       {% else %}
-        <img src="" alt="User Profile" class="size-12 rounded-full object-cover" />
+        <img src="{{ user.gravatar() }}" alt="User Profile" class="size-12 rounded-full object-cover" />
       {% endif %}
         <div>
           <span class="font-medium text-gray-950 dark:text-gray-100">{{ user.name() }}</span>

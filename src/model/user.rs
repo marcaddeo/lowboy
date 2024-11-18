@@ -7,6 +7,7 @@ use diesel::{insert_into, prelude::*};
 use diesel::{QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
+use gravatar_api::avatars as gravatars;
 use lowboy_record::prelude::*;
 
 pub trait ModelRecord {}
@@ -25,6 +26,15 @@ pub trait LowboyUserTrait<T>: FromRecord<T> {
     fn email(&self) -> &String;
     fn password(&self) -> &Option<String>;
     fn access_token(&self) -> &Option<String>;
+    fn gravatar(&self) -> String {
+        gravatars::Avatar::builder(self.email())
+            .size(256)
+            .default(gravatars::Default::MysteryPerson)
+            .rating(gravatars::Rating::Pg)
+            .build()
+            .image_url()
+            .to_string()
+    }
 }
 
 // @TODO we need to mask the password and access token again, which requires fixing the macro to
