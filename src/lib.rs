@@ -8,11 +8,17 @@ use axum_login::{
 use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
 use context::create_context;
-use diesel::sqlite::SqliteConnection;
+use diesel::{
+    sqlite::{Sqlite, SqliteConnection},
+    QueryResult,
+};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use diesel_migrations::{
+    embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
+};
 use diesel_sqlite_session_store::DieselSqliteSessionStore;
 use flume::{Receiver, Sender};
-use std::time::Duration;
+use std::{io::LineWriter, time::Duration};
 use tokio::{signal, task::AbortHandle};
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
@@ -33,6 +39,8 @@ pub use {
     context::{AppContext, Context, LowboyContext},
 };
 
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 pub type Events = (Sender<Event>, Receiver<Event>);
 
@@ -41,11 +49,41 @@ pub struct Lowboy<AC: AppContext> {
     context: AC,
 }
 
+struct MigrationWriter;
+impl std::io::Write for MigrationWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut line = String::from_utf8(buf.into()).unwrap();
+
+        // Remove trailing newline.
+        line.pop();
+
+        info!("{}", line);
+
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 impl<AC: AppContext + Clone> Lowboy<AC> {
     pub async fn boot() -> Self {
-        let context = create_context().await.unwrap();
+        let context = create_context::<AC>().await.unwrap();
+
+        let mut conn = context.database().get().await.unwrap();
+        conn.spawn_blocking(|conn| Self::run_migrations(conn))
+            .await
+            .unwrap();
 
         Self { context }
+    }
+
+    fn run_migrations(conn: &mut impl MigrationHarness<Sqlite>) -> QueryResult<()> {
+        HarnessWithOutput::new(conn, LineWriter::new(MigrationWriter))
+            .run_pending_migrations(MIGRATIONS)
+            .unwrap();
+        Ok(())
     }
 
     pub async fn serve<App: app::App<AC>>(self) -> Result<()> {
