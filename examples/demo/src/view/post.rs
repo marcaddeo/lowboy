@@ -1,5 +1,5 @@
 use crate::model;
-use crate::model::AppUser as _;
+use crate::model::DemoUser as _;
 use rinja::Template;
 
 #[derive(Clone, Template)]

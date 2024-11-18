@@ -9,7 +9,7 @@ use lowboy::model::LowboyUserTrait;
 use lowboy::Connection;
 use lowboy_record::prelude::*;
 
-pub trait AppUser {
+pub trait DemoUser {
     fn name(&self) -> &String;
     fn avatar(&self) -> &Option<String>;
     fn byline(&self) -> &Option<String>;
@@ -28,7 +28,7 @@ pub struct User {
     pub byline: Option<String>,
 }
 
-impl AppUser for User {
+impl DemoUser for User {
     fn name(&self) -> &String {
         &self.name
     }

@@ -1,4 +1,4 @@
-use crate::model::AppUser;
+use crate::model::DemoUser;
 use axum_messages::Message;
 use lowboy::{
     model::{LowboyUserRecord, LowboyUserTrait},
@@ -8,14 +8,14 @@ use rinja::Template;
 
 #[derive(Template, Default)]
 #[template(path = "layout.html")]
-pub struct Layout<T: LowboyUserTrait<LowboyUserRecord> + AppUser> {
+pub struct Layout<T: LowboyUserTrait<LowboyUserRecord> + DemoUser> {
     pub messages: Vec<Message>,
     pub content: String,
     pub user: Option<T>,
     pub context: LayoutContext,
 }
 
-impl<T: LowboyUserTrait<LowboyUserRecord> + Default + AppUser> LowboyLayout<T> for Layout<T> {
+impl<T: LowboyUserTrait<LowboyUserRecord> + Default + DemoUser> LowboyLayout<T> for Layout<T> {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self {
         self.messages = messages;
         self
