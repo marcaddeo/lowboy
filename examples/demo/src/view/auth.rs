@@ -1,4 +1,5 @@
-use lowboy::{auth::LowboyLoginView, auth::LowboyRegisterView, controller::auth::RegisterForm};
+use crate::form::DemoRegistrationForm;
+use lowboy::auth::{LowboyLoginView, LowboyRegisterView, RegistrationForm};
 use rinja::Template;
 
 #[derive(Clone, Template, Default)]
@@ -14,20 +15,20 @@ impl LowboyLoginView for Login {
     }
 }
 
-#[derive(Clone, Template, Default)]
+#[derive(Clone, Template)]
 #[template(path = "pages/auth/register.html")]
-pub struct Register {
+pub struct Register<T: RegistrationForm + DemoRegistrationForm> {
     pub next: Option<String>,
-    pub form: RegisterForm,
+    pub form: T,
 }
 
-impl LowboyRegisterView for Register {
+impl<T: RegistrationForm + DemoRegistrationForm + Clone> LowboyRegisterView<T> for Register<T> {
     fn set_next(&mut self, next: Option<String>) -> &mut Self {
         self.next = next;
         self
     }
 
-    fn set_form(&mut self, form: RegisterForm) -> &mut Self {
+    fn set_form(&mut self, form: T) -> &mut Self {
         self.form = form;
         self
     }

@@ -6,21 +6,20 @@ use axum::{
     Form, Router,
 };
 use axum_messages::Messages;
-use derive_masked::{DebugMasked, DisplayMasked};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use oauth2::CsrfToken;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tower_sessions::Session;
 use tracing::warn;
-use validator::Validate;
+use validator::{Validate, ValidationErrorsKind};
 
 use crate::{
     app,
-    auth::{LowboyLoginView as _, LowboyRegisterView, RegistrationDetails},
+    auth::{LowboyLoginView as _, LowboyRegisterView, RegistrationDetails, RegistrationForm},
     context::CloneableAppContext,
     lowboy_view,
     model::{CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation},
-    AppContext, AuthSession,
+    AuthSession,
 };
 
 const NEXT_URL_KEY: &str = "auth.next-url";
@@ -30,7 +29,7 @@ const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
 pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
     Router::new()
         .route("/register", get(register_form::<App, AC>))
-        .route("/register", post(register::<AC>))
+        .route("/register", post(register::<App, AC>))
         .route("/login", get(form::<App, AC>))
         .route("/login", post(login))
         .route("/login/oauth", get(oauth))
@@ -66,11 +65,11 @@ pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
         return Redirect::to("/").into_response();
     }
 
-    let form: RegisterForm = session
+    let form = session
         .remove(REGISTRATION_FORM_KEY)
         .await
         .unwrap()
-        .unwrap_or_default();
+        .unwrap_or(App::RegistrationForm::empty());
 
     lowboy_view!(App::register_view(&context).set_form(form).clone(), {
         "title" => "Register",
@@ -78,25 +77,12 @@ pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
     .into_response()
 }
 
-// @TODO figure out how to put this validation just on the NewModelRecords
-#[derive(Clone, DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
-pub struct RegisterForm {
-    #[validate(length(min = 1))]
-    pub name: String,
-    #[validate(length(min = 1, max = 32))]
-    pub username: String,
-    #[validate(email)]
-    pub email: String,
-    #[validate(length(min = 8))]
-    password: String,
-}
-
-pub async fn register<AC: AppContext>(
+pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
-    Form(input): Form<RegisterForm>,
+    Form(input): Form<App::RegistrationForm>,
 ) -> impl IntoResponse {
     if user.is_some() {
         return Redirect::to("/").into_response();
@@ -104,15 +90,12 @@ pub async fn register<AC: AppContext>(
 
     if let Err(validation) = input.validate() {
         // @TODO just put these error messages in teh validation?
-        for (field, _) in validation.into_errors() {
-            let message = match field {
-                "name" => "Your name cannot be empty",
-                "username" => "Username must be between 1 and 32 characters",
-                "email" => "Email provided is not valid",
-                "password" => "Password must be at least 8 characters",
-                _ => "An unknown error occurred",
-            };
-            messages = messages.error(message);
+        for (_, info) in validation.into_errors() {
+            if let ValidationErrorsKind::Field(errors) = info {
+                for error in errors {
+                    messages = messages.error(error.to_string());
+                }
+            }
         }
 
         session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
@@ -121,9 +104,9 @@ pub async fn register<AC: AppContext>(
 
     let mut conn = context.database().get().await.unwrap();
 
-    let password = password_auth::generate_hash(&input.password);
+    let password = password_auth::generate_hash(input.password());
     let new_user =
-        NewLowboyUserRecord::new(&input.username, &input.email).with_password(Some(&password));
+        NewLowboyUserRecord::new(input.username(), input.email()).with_password(Some(&password));
     let res = new_user.create_or_update(&mut conn).await;
 
     match res {
@@ -140,7 +123,7 @@ pub async fn register<AC: AppContext>(
     } else {
         if let (user, Operation::Create) = res.unwrap() {
             context
-                .on_new_user(&user, RegistrationDetails::Local(input.clone()))
+                .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
                 .await
                 .unwrap();
         }

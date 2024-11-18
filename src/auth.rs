@@ -1,5 +1,5 @@
+#![allow(clippy::transmute_ptr_to_ref)]
 use crate::{
-    controller::auth::RegisterForm,
     model::{
         CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
     },
@@ -9,6 +9,9 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use axum_login::AuthnBackend;
+use derive_masked::{DebugMasked, DisplayMasked};
+use dyn_clone::DynClone;
+use mopa::mopafy;
 use oauth2::{
     basic::{BasicClient, BasicRequestTokenError},
     http::header::{AUTHORIZATION, USER_AGENT},
@@ -17,22 +20,74 @@ use oauth2::{
     AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, TokenResponse, TokenUrl,
 };
 use password_auth::verify_password;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
 
-pub trait LowboyRegisterView: LowboyView + Default + Clone {
-    fn set_next(&mut self, next: Option<String>) -> &mut Self;
-    fn set_form(&mut self, form: RegisterForm) -> &mut Self;
+#[typetag::serde(tag = "RegistrationForm")]
+pub trait RegistrationForm: Validate + Send + Sync + DynClone + mopa::Any {
+    fn empty() -> Self
+    where
+        Self: Sized;
+    fn username(&self) -> &String;
+    fn email(&self) -> &String;
+    fn password(&self) -> &String;
+}
+dyn_clone::clone_trait_object!(RegistrationForm);
+mopafy!(RegistrationForm);
+
+#[derive(Validate, Serialize, Deserialize, DebugMasked, DisplayMasked, Clone, Default)]
+pub struct LowboyRegisterForm {
+    #[validate(length(
+        min = 1,
+        max = 32,
+        message = "Username must be between 1 and 32 characters"
+    ))]
+    pub username: String,
+
+    #[validate(email(message = "Email provided is not valid"))]
+    pub email: String,
+
+    #[masked]
+    #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
+    password: String,
 }
 
-pub trait LowboyLoginView: LowboyView + Default + Clone {
+#[typetag::serde]
+impl RegistrationForm for LowboyRegisterForm {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        <Self as Default>::default()
+    }
+
+    fn username(&self) -> &String {
+        &self.username
+    }
+
+    fn email(&self) -> &String {
+        &self.email
+    }
+
+    fn password(&self) -> &String {
+        &self.password
+    }
+}
+
+pub trait LowboyRegisterView<T: RegistrationForm>: LowboyView + Clone {
+    fn set_next(&mut self, next: Option<String>) -> &mut Self;
+    fn set_form(&mut self, form: T) -> &mut Self;
+}
+
+pub trait LowboyLoginView: LowboyView + Clone {
     fn set_next(&mut self, next: Option<String>) -> &mut Self;
 }
 
 pub enum RegistrationDetails {
     GitHub(GitHubUserInfo),
-    Local(RegisterForm),
+    Local(Box<dyn RegistrationForm>),
 }
 
 #[derive(Clone)]

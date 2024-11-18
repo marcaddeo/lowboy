@@ -1,5 +1,6 @@
 use crate::{
     controller,
+    form::RegisterForm,
     model::User,
     view::{
         auth::{Login, Register},
@@ -13,8 +14,9 @@ use axum::{
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lowboy::{
-    auth::RegistrationDetails, model::LowboyUserRecord, App, AppContext, Connection, Context,
-    Events, LowboyAuth,
+    auth::{RegistrationDetails, RegistrationForm},
+    model::LowboyUserRecord,
+    App, AppContext, Connection, Context, Events, LowboyAuth,
 };
 use tokio_cron_scheduler::JobScheduler;
 
@@ -50,12 +52,13 @@ impl AppContext for DemoContext {
         let mut conn = self.database.get().await?;
         let (name, avatar) = match details {
             RegistrationDetails::Local(form) => {
+                let form = form.downcast_ref::<RegisterForm>().unwrap();
                 let (first_name, last_name) = form.name.split_once(' ').unwrap_or((&form.name, ""));
                 let avatar = format!(
                     "https://avatar.iran.liara.run/username?username={}+{}",
                     first_name, last_name
                 );
-                (form.name, avatar)
+                (form.name.clone(), avatar)
             }
             RegistrationDetails::GitHub(info) => (info.name, info.avatar_url),
         };
@@ -85,9 +88,10 @@ pub struct Demo;
 
 impl App<DemoContext> for Demo {
     type Layout = Layout<Self::User>;
-    type RegisterView = Register;
+    type RegisterView = Register<Self::RegistrationForm>;
     type LoginView = Login;
     type User = User;
+    type RegistrationForm = RegisterForm;
 
     fn name() -> &'static str {
         "demo"
@@ -99,6 +103,17 @@ impl App<DemoContext> for Demo {
             .route("/post", post(controller::post::create))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
+    }
+
+    fn register_view(_context: &DemoContext) -> Self::RegisterView {
+        Self::RegisterView {
+            next: None,
+            form: Self::RegistrationForm::empty(),
+        }
+    }
+
+    fn login_view(_context: &DemoContext) -> Self::LoginView {
+        Self::LoginView { next: None }
     }
 }
 

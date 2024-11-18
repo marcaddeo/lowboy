@@ -40,6 +40,7 @@ flume = "0.11.1"
 futures = "0.3.31"
 gravatar_api = "0.3.0"
 lowboy_record = { version = "0.1.0", path = "lib/lowboy_record" }
+mopa = "0.2.2"
 notify = "7.0.0"
 oauth2 = "4.4.2"
 password-auth = "1.0.0"
@@ -58,6 +59,7 @@ tower-sessions = { version = "0.13.0", features = ["signed"] }
 tower-sessions-core = { version = "0.13.0", features = ["deletion-task"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+typetag = "0.2.18"
 validator = { version = "0.19.0", features = ["derive"] }
 xdg = "2.5.2"
 
