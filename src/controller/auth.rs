@@ -18,8 +18,8 @@ use crate::{
     app,
     auth::{LowboyLoginView as _, LowboyRegisterView, RegistrationDetails},
     context::CloneableAppContext,
+    lowboy_view,
     model::{CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation},
-    view::View,
     AppContext, AuthSession,
 };
 
@@ -52,7 +52,9 @@ pub async fn form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
-    View(App::login_view(&context).set_next(next).clone())
+    lowboy_view!(App::login_view(&context).set_next(next).clone(), {
+        "title" => "Login",
+    })
 }
 
 pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
@@ -70,7 +72,10 @@ pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
         .unwrap()
         .unwrap_or_default();
 
-    View(App::register_view(&context).set_form(form).clone()).into_response()
+    lowboy_view!(App::register_view(&context).set_form(form).clone(), {
+        "title" => "Register",
+    })
+    .into_response()
 }
 
 // @TODO figure out how to put this validation just on the NewModelRecords
