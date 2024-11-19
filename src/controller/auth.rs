@@ -247,6 +247,10 @@ pub async fn oauth(
         return StatusCode::BAD_REQUEST.into_response();
     };
 
+    let Ok(next) = session.get(NEXT_URL_KEY).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
     let credentials = Credentials {
         kind: CredentialKind::OAuth,
         password: None,
@@ -255,7 +259,7 @@ pub async fn oauth(
             old_state,
             new_state,
         }),
-        next: None,
+        next,
     };
 
     let user = match auth_session.authenticate(credentials).await {
