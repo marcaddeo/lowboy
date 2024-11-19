@@ -90,7 +90,7 @@ impl RegistrationForm for LowboyRegisterForm {
     }
 }
 
-pub trait LowboyRegisterView<T: RegistrationForm>: LowboyView + Clone {
+pub trait LowboyRegisterView<T: RegistrationForm + Default>: LowboyView + Clone + Default {
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 
@@ -146,7 +146,7 @@ impl LoginForm for LowboyLoginForm {
     }
 }
 
-pub trait LowboyLoginView<T: LoginForm>: LowboyView + Clone {
+pub trait LowboyLoginView<T: LoginForm + Default>: LowboyView + Clone + Default {
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 

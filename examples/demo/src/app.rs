@@ -14,7 +14,7 @@ use axum::{
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lowboy::{
-    auth::{LoginForm, LowboyLoginForm, RegistrationDetails, RegistrationForm},
+    auth::{LowboyLoginForm, RegistrationDetails},
     model::LowboyUserRecord,
     App, AppContext, Connection, Context, Events, LowboyAuth,
 };
@@ -104,18 +104,6 @@ impl App<DemoContext> for Demo {
             .route("/post", post(controller::post::create))
             // Previous routes require authentication.
             .route_layer(login_required!(LowboyAuth, login_url = "/login"))
-    }
-
-    fn register_view(_context: &DemoContext) -> Self::RegisterView {
-        Self::RegisterView {
-            form: Self::RegistrationForm::empty(),
-        }
-    }
-
-    fn login_view(_context: &DemoContext) -> Self::LoginView {
-        Self::LoginView {
-            form: Self::LoginForm::empty(),
-        }
     }
 }
 

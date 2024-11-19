@@ -1,4 +1,4 @@
-use derive_masked::{DebugMasked, DisplayMasked};
+use derive_masked::DebugMasked;
 use derive_more::derive::Display;
 use lowboy::auth::RegistrationForm;
 use serde::{Deserialize, Serialize};

@@ -12,9 +12,13 @@ use serde::{Deserialize, Serialize};
 pub trait App<AC: CloneableAppContext>: Send + 'static {
     type User: LowboyUserTrait<LowboyUserRecord>;
     type Layout: LowboyLayout<Self::User>;
-    type RegistrationForm: RegistrationForm + Clone + Serialize + for<'de> Deserialize<'de>;
+    type RegistrationForm: RegistrationForm
+        + Clone
+        + Default
+        + Serialize
+        + for<'de> Deserialize<'de>;
     type RegisterView: LowboyRegisterView<Self::RegistrationForm>;
-    type LoginForm: LoginForm + Clone + Serialize + for<'de> Deserialize<'de>;
+    type LoginForm: LoginForm + Clone + Default + Serialize + for<'de> Deserialize<'de>;
     type LoginView: LowboyLoginView<Self::LoginForm>;
 
     fn name() -> &'static str;
@@ -23,9 +27,13 @@ pub trait App<AC: CloneableAppContext>: Send + 'static {
         Self::Layout::default()
     }
 
-    fn register_view(context: &AC) -> Self::RegisterView;
+    fn register_view(context: &AC) -> Self::RegisterView {
+        Self::RegisterView::default()
+    }
 
-    fn login_view(context: &AC) -> Self::LoginView;
+    fn login_view(context: &AC) -> Self::LoginView {
+        Self::LoginView::default()
+    }
 
     fn routes() -> Router<AC>;
 
