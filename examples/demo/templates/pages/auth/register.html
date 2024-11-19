@@ -58,7 +58,7 @@
         <div class="flex w-full mt-10 text-center flex-col gap-1">
           <button type="submit" class="mt-4 cursor-pointer whitespace-nowrap bg-sky-900 w-full px-3 py-4 text-center text-sm font-medium tracking-wide text-white transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 active:opacity-100 active:outline-offset-0 dark:bg-sky-400 dark:text-black dark:focus-visible:outline-sky-400 rounded-md">Register</button>
         </div>
-        {% if let Some(next) = next %}
+        {% if let Some(next) = form.next() %}
         <input type="hidden" name="next" value="{{ next }}" />
         {% endif %}
       </form>

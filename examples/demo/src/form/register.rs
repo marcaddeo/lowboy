@@ -1,4 +1,5 @@
 use derive_masked::{DebugMasked, DisplayMasked};
+use derive_more::derive::Display;
 use lowboy::auth::RegistrationForm;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
@@ -7,7 +8,8 @@ pub trait DemoRegistrationForm {
     fn name(&self) -> &String;
 }
 
-#[derive(Validate, Serialize, Deserialize, DebugMasked, DisplayMasked, Clone, Default)]
+#[derive(Validate, Serialize, Deserialize, DebugMasked, Display, Clone, Default)]
+#[display("Name: {name} Username: {username} Email: {email} Password: REDACTED Next: {next:?}")]
 pub struct RegisterForm {
     #[validate(length(min = 1, message = "Your name cannot be empty"))]
     pub name: String,
@@ -25,6 +27,8 @@ pub struct RegisterForm {
     #[masked]
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     password: String,
+
+    next: Option<String>,
 }
 
 #[typetag::serde]
@@ -46,6 +50,14 @@ impl RegistrationForm for RegisterForm {
 
     fn password(&self) -> &String {
         &self.password
+    }
+
+    fn next(&self) -> &Option<String> {
+        &self.next
+    }
+
+    fn set_next(&mut self, next: Option<String>) {
+        self.next = next;
     }
 }
 

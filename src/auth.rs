@@ -9,7 +9,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use axum_login::AuthnBackend;
-use derive_masked::{DebugMasked, DisplayMasked};
+use derive_masked::DebugMasked;
 use derive_more::derive::Display;
 use dyn_clone::DynClone;
 use mopa::mopafy;
@@ -34,11 +34,14 @@ pub trait RegistrationForm: Validate + Send + Sync + DynClone + mopa::Any {
     fn username(&self) -> &String;
     fn email(&self) -> &String;
     fn password(&self) -> &String;
+    fn next(&self) -> &Option<String>;
+    fn set_next(&mut self, next: Option<String>);
 }
 dyn_clone::clone_trait_object!(RegistrationForm);
 mopafy!(RegistrationForm);
 
-#[derive(Validate, Serialize, Deserialize, DebugMasked, DisplayMasked, Clone, Default)]
+#[derive(Validate, Serialize, Deserialize, DebugMasked, Display, Clone, Default)]
+#[display("Username: {username} Email: {email} Password: REDACTED Next: {next:?}")]
 pub struct LowboyRegisterForm {
     #[validate(length(
         min = 1,
@@ -53,6 +56,8 @@ pub struct LowboyRegisterForm {
     #[masked]
     #[validate(length(min = 8, message = "Password must be at least 8 characters"))]
     password: String,
+
+    next: Option<String>,
 }
 
 #[typetag::serde]
@@ -75,10 +80,17 @@ impl RegistrationForm for LowboyRegisterForm {
     fn password(&self) -> &String {
         &self.password
     }
+
+    fn next(&self) -> &Option<String> {
+        &self.next
+    }
+
+    fn set_next(&mut self, next: Option<String>) {
+        self.next = next;
+    }
 }
 
 pub trait LowboyRegisterView<T: RegistrationForm>: LowboyView + Clone {
-    fn set_next(&mut self, next: Option<String>) -> &mut Self;
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 
@@ -96,7 +108,7 @@ dyn_clone::clone_trait_object!(LoginForm);
 mopafy!(LoginForm);
 
 #[derive(Validate, Serialize, Deserialize, DebugMasked, Display, Clone, Default)]
-#[display("{username} REDACTED {next:?}")]
+#[display("Username: {username} Password: REDACTED Next: {next:?}")]
 pub struct LowboyLoginForm {
     #[validate(length(min = 1, message = "Username is required"))]
     pub username: String,

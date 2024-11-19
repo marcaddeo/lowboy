@@ -108,7 +108,6 @@ impl App<DemoContext> for Demo {
 
     fn register_view(_context: &DemoContext) -> Self::RegisterView {
         Self::RegisterView {
-            next: None,
             form: Self::RegistrationForm::empty(),
         }
     }
