@@ -29,8 +29,8 @@ use crate::{
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
-const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
-const LOGIN_FORM_KEY: &str = "auth.login_form";
+const REGISTRATION_FORM_KEY: &str = "auth.registration-form";
+const LOGIN_FORM_KEY: &str = "auth.login-form";
 
 pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
     Router::new()
