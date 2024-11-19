@@ -14,7 +14,7 @@ use axum::{
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lowboy::{
-    auth::{RegistrationDetails, RegistrationForm},
+    auth::{LoginForm, LowboyLoginForm, RegistrationDetails, RegistrationForm},
     model::LowboyUserRecord,
     App, AppContext, Connection, Context, Events, LowboyAuth,
 };
@@ -89,9 +89,10 @@ pub struct Demo;
 impl App<DemoContext> for Demo {
     type Layout = Layout<Self::User>;
     type RegisterView = Register<Self::RegistrationForm>;
-    type LoginView = Login;
+    type LoginView = Login<Self::LoginForm>;
     type User = User;
     type RegistrationForm = RegisterForm;
+    type LoginForm = LowboyLoginForm;
 
     fn name() -> &'static str {
         "demo"
@@ -113,7 +114,9 @@ impl App<DemoContext> for Demo {
     }
 
     fn login_view(_context: &DemoContext) -> Self::LoginView {
-        Self::LoginView { next: None }
+        Self::LoginView {
+            form: Self::LoginForm::empty(),
+        }
     }
 }
 

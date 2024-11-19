@@ -1,5 +1,5 @@
 use crate::{
-    auth::{LowboyLoginView, LowboyRegisterView, RegistrationForm},
+    auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm},
     context::CloneableAppContext,
     controller,
     model::{LowboyUserRecord, LowboyUserTrait},
@@ -12,9 +12,10 @@ use serde::{Deserialize, Serialize};
 pub trait App<AC: CloneableAppContext>: Send + 'static {
     type Layout: LowboyLayout<Self::User>;
     type RegisterView: LowboyRegisterView<Self::RegistrationForm>;
-    type LoginView: LowboyLoginView;
+    type LoginView: LowboyLoginView<Self::LoginForm>;
     type User: LowboyUserTrait<LowboyUserRecord>;
     type RegistrationForm: RegistrationForm + Clone + Serialize + for<'de> Deserialize<'de>;
+    type LoginForm: LoginForm + Clone + Serialize + for<'de> Deserialize<'de>;
 
     fn name() -> &'static str;
 

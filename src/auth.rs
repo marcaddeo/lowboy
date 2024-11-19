@@ -10,6 +10,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use axum_login::AuthnBackend;
 use derive_masked::{DebugMasked, DisplayMasked};
+use derive_more::derive::Display;
 use dyn_clone::DynClone;
 use mopa::mopafy;
 use oauth2::{
@@ -81,8 +82,60 @@ pub trait LowboyRegisterView<T: RegistrationForm>: LowboyView + Clone {
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 
-pub trait LowboyLoginView: LowboyView + Clone {
-    fn set_next(&mut self, next: Option<String>) -> &mut Self;
+#[typetag::serde(tag = "LoginForm")]
+pub trait LoginForm: Validate + Send + Sync + DynClone + mopa::Any {
+    fn empty() -> Self
+    where
+        Self: Sized;
+    fn username(&self) -> &String;
+    fn password(&self) -> &String;
+    fn next(&self) -> &Option<String>;
+    fn set_next(&mut self, next: Option<String>);
+}
+dyn_clone::clone_trait_object!(LoginForm);
+mopafy!(LoginForm);
+
+#[derive(Validate, Serialize, Deserialize, DebugMasked, Display, Clone, Default)]
+#[display("{username} REDACTED {next:?}")]
+pub struct LowboyLoginForm {
+    #[validate(length(min = 1, message = "Username is required"))]
+    pub username: String,
+
+    #[masked]
+    #[validate(length(min = 1, message = "Password is required"))]
+    password: String,
+
+    next: Option<String>,
+}
+
+#[typetag::serde]
+impl LoginForm for LowboyLoginForm {
+    fn empty() -> Self
+    where
+        Self: Sized,
+    {
+        <Self as Default>::default()
+    }
+
+    fn username(&self) -> &String {
+        &self.username
+    }
+
+    fn password(&self) -> &String {
+        &self.password
+    }
+
+    fn next(&self) -> &Option<String> {
+        &self.next
+    }
+
+    fn set_next(&mut self, next: Option<String>) {
+        self.next = next;
+    }
+}
+
+pub trait LowboyLoginView<T: LoginForm>: LowboyView + Clone {
+    fn set_form(&mut self, form: T) -> &mut Self;
 }
 
 pub enum RegistrationDetails {
@@ -160,9 +213,12 @@ impl AuthnBackend for LowboyAuth {
                 let credentials = credentials
                     .password
                     .expect("CredentialKind::Password password field should not be none");
-                let user =
+                let Some(user) =
                     LowboyUser::find_by_username_having_password(&credentials.username, &mut conn)
-                        .await?;
+                        .await?
+                else {
+                    return Ok(None);
+                };
 
                 tokio::task::spawn_blocking(|| {
                     Ok(verify_password(

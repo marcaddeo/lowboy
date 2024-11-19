@@ -4,7 +4,7 @@ use axum_login::AuthUser;
 use derive_masked::DebugMasked;
 use diesel::upsert::excluded;
 use diesel::{insert_into, prelude::*};
-use diesel::{QueryResult, Selectable};
+use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
@@ -68,13 +68,21 @@ impl LowboyUser {
     pub async fn find_by_username_having_password(
         username: &str,
         conn: &mut Connection,
-    ) -> QueryResult<Self> {
-        let record: LowboyUserRecord = lowboy_user::table
+    ) -> QueryResult<Option<Self>> {
+        let record = lowboy_user::table
             .filter(lowboy_user::username.eq(username))
             .filter(lowboy_user::password.is_not_null())
-            .first(conn)
-            .await?;
-        Self::from_record(&record, conn).await
+            .first::<LowboyUserRecord>(conn)
+            .await
+            .optional()?;
+
+        let user = if let Some(record) = record {
+            Some(Self::from_record(&record, conn).await?)
+        } else {
+            None
+        };
+
+        Ok(user)
     }
 }
 
