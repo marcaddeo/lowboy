@@ -10,12 +10,12 @@ use serde::{Deserialize, Serialize};
 
 #[allow(unused_variables)]
 pub trait App<AC: CloneableAppContext>: Send + 'static {
-    type Layout: LowboyLayout<Self::User>;
-    type RegisterView: LowboyRegisterView<Self::RegistrationForm>;
-    type LoginView: LowboyLoginView<Self::LoginForm>;
     type User: LowboyUserTrait<LowboyUserRecord>;
+    type Layout: LowboyLayout<Self::User>;
     type RegistrationForm: RegistrationForm + Clone + Serialize + for<'de> Deserialize<'de>;
+    type RegisterView: LowboyRegisterView<Self::RegistrationForm>;
     type LoginForm: LoginForm + Clone + Serialize + for<'de> Deserialize<'de>;
+    type LoginView: LowboyLoginView<Self::LoginForm>;
 
     fn name() -> &'static str;
 
