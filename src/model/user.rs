@@ -1,39 +1,65 @@
-use crate::model::{UserData, UserDataRecord};
-use crate::schema::{user, user_data};
+use crate::schema::lowboy_user;
 use crate::Connection;
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
 use diesel::upsert::excluded;
 use diesel::{insert_into, prelude::*};
-use diesel::{QueryResult, Selectable};
+use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
+use gravatar_api::avatars as gravatars;
 use lowboy_record::prelude::*;
 
-use super::NewUserDataRecord;
+pub trait ModelRecord {}
 
+// @TODO pub trait FromRecord<T: ModelRecord> {
+#[async_trait::async_trait]
+pub trait FromRecord<T> {
+    async fn from_record(record: &T, conn: &mut Connection) -> QueryResult<Self>
+    where
+        Self: Sized;
+}
+
+pub trait LowboyUserTrait<T>: FromRecord<T> {
+    fn id(&self) -> i32;
+    fn username(&self) -> &String;
+    fn email(&self) -> &String;
+    fn password(&self) -> &Option<String>;
+    fn access_token(&self) -> &Option<String>;
+    fn gravatar(&self) -> String {
+        gravatars::Avatar::builder(self.email())
+            .size(256)
+            .default(gravatars::Default::MysteryPerson)
+            .rating(gravatars::Rating::Pg)
+            .build()
+            .image_url()
+            .to_string()
+    }
+}
+
+// @TODO we need to mask the password and access token again, which requires fixing the macro to
+// allow doing so.
 #[apply(lowboy_record!)]
 #[derive(Clone, DebugMasked, Default, Queryable, Selectable, AsChangeset, Identifiable)]
-#[diesel(table_name = crate::schema::user)]
+#[diesel(table_name = crate::schema::lowboy_user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct User {
+pub struct LowboyUser {
     pub id: i32,
     pub username: String,
     pub email: String,
     pub password: Option<String>,
     pub access_token: Option<String>,
-    pub data: HasOne<UserData>,
 }
 
-impl User {
+impl LowboyUser {
     pub async fn find(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        let record: UserRecord = user::table.find(id).first(conn).await?;
+        let record: LowboyUserRecord = lowboy_user::table.find(id).first(conn).await?;
         Self::from_record(&record, conn).await
     }
 
     pub async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Self> {
-        let record: UserRecord = user::table
-            .filter(user::username.eq(username))
+        let record: LowboyUserRecord = lowboy_user::table
+            .filter(lowboy_user::username.eq(username))
             .first(conn)
             .await?;
         Self::from_record(&record, conn).await
@@ -42,44 +68,93 @@ impl User {
     pub async fn find_by_username_having_password(
         username: &str,
         conn: &mut Connection,
-    ) -> QueryResult<Self> {
-        let record: UserRecord = user::table
-            .filter(user::username.eq(username))
-            .filter(user::password.is_not_null())
-            .first(conn)
-            .await?;
-        Self::from_record(&record, conn).await
+    ) -> QueryResult<Option<Self>> {
+        let record = lowboy_user::table
+            .filter(lowboy_user::username.eq(username))
+            .filter(lowboy_user::password.is_not_null())
+            .first::<LowboyUserRecord>(conn)
+            .await
+            .optional()?;
+
+        let user = if let Some(record) = record {
+            Some(Self::from_record(&record, conn).await?)
+        } else {
+            None
+        };
+
+        Ok(user)
     }
 }
 
-impl<'a> NewUserRecord<'a> {
+#[async_trait::async_trait]
+impl FromRecord<LowboyUserRecord> for LowboyUser {
+    async fn from_record(record: &LowboyUserRecord, conn: &mut Connection) -> QueryResult<Self> {
+        Self::from_record(record, conn).await
+    }
+}
+
+impl LowboyUserTrait<LowboyUserRecord> for LowboyUser {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn username(&self) -> &String {
+        &self.username
+    }
+
+    fn email(&self) -> &String {
+        &self.email
+    }
+
+    fn password(&self) -> &Option<String> {
+        &self.password
+    }
+
+    fn access_token(&self) -> &Option<String> {
+        &self.access_token
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Operation {
+    Create = 0,
+    Update = 1,
+}
+
+impl From<i64> for Operation {
+    fn from(value: i64) -> Self {
+        match value {
+            0 => Self::Create,
+            1 => Self::Update,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<'a> NewLowboyUserRecord<'a> {
     pub async fn create_or_update(
         &self,
-        name: &'a str,
-        byline: Option<&'a str>,
-        avatar: Option<&'a str>,
         conn: &mut Connection,
-    ) -> QueryResult<UserRecord> {
+    ) -> QueryResult<(LowboyUserRecord, Operation)> {
         conn.transaction::<_, diesel::result::Error, _>(|conn| {
             async move {
-                let user: UserRecord = insert_into(user::table)
+                // @TODO can we do this in one query..?
+                let operation = lowboy_user::table
+                    .filter(lowboy_user::username.eq(self.username))
+                    .count()
+                    .get_result::<i64>(conn)
+                    .await
+                    .map(Operation::from)?;
+
+                let user: LowboyUserRecord = insert_into(lowboy_user::table)
                     .values(self)
-                    .on_conflict(user::email)
+                    .on_conflict(lowboy_user::email)
                     .do_update()
-                    .set(user::access_token.eq(excluded(user::access_token)))
+                    .set(lowboy_user::access_token.eq(excluded(lowboy_user::access_token)))
                     .get_result(conn)
                     .await?;
-                let data = NewUserDataRecord::new(user.id, name)
-                    .with_avatar(avatar)
-                    .with_byline(byline);
-                insert_into(user_data::table)
-                    .values(data.clone())
-                    .on_conflict(user_data::user_id)
-                    .do_nothing()
-                    .execute(conn)
-                    .await?;
 
-                Ok(user)
+                Ok((user, operation))
             }
             .scope_boxed()
         })
@@ -87,7 +162,7 @@ impl<'a> NewUserRecord<'a> {
     }
 }
 
-impl AuthUser for UserRecord {
+impl AuthUser for LowboyUserRecord {
     type Id = i32;
 
     fn id(&self) -> Self::Id {

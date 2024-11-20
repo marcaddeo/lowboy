@@ -1,8 +1,8 @@
 use crate::{
     app,
     auth::AuthSession,
-    model::{self, User},
-    AppContext,
+    context::CloneableAppContext,
+    model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
 };
 use axum::{
     body::Body,
@@ -13,7 +13,7 @@ use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
-pub async fn render_view<App: app::App<AC>, AC: AppContext>(
+pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     messages: Messages,
@@ -22,7 +22,7 @@ pub async fn render_view<App: app::App<AC>, AC: AppContext>(
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await.unwrap();
         let user = if let Some(record) = user {
-            Some(model::User::from_record(&record, &mut conn).await.unwrap())
+            Some(App::User::from_record(&record, &mut conn).await.unwrap())
         } else {
             None
         };
@@ -53,11 +53,11 @@ pub async fn render_view<App: app::App<AC>, AC: AppContext>(
     }
 }
 
-pub trait LowboyLayout: ToString + Default {
+pub trait LowboyLayout<T: LowboyUserTrait<LowboyUserRecord>>: ToString + Default {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self;
     fn set_content(&mut self, content: impl LowboyView) -> &mut Self;
     fn set_context(&mut self, context: LayoutContext) -> &mut Self;
-    fn set_user(&mut self, user: Option<User>) -> &mut Self;
+    fn set_user(&mut self, user: Option<T>) -> &mut Self;
 }
 
 pub trait LowboyView: ToString + DynClone + Send + Sync {}

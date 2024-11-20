@@ -1,16 +1,15 @@
+use super::User;
+use crate::model::UserRecord;
 use crate::schema::post;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use lowboy::{
-    model::{User, UserRecord},
-    Connection,
-};
+use lowboy::{model::LowboyUserRecord, Connection};
 use lowboy_record::prelude::*;
 
 #[apply(lowboy_record!)]
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
 #[diesel(table_name = crate::schema::post)]
-#[diesel(belongs_to(UserRecord, foreign_key = user_id))]
+#[diesel(belongs_to(LowboyUserRecord, foreign_key = user_id))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Post {
     pub id: i32,

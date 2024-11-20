@@ -6,17 +6,17 @@
 
         <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
           <label for="name" class="w-fit pl-0.5 text-sm">Your name</label>
-          <input id="name" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="name" placeholder="First and last name" value="{{ form.name }}" autocomplete="name" required />
+          <input id="name" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="name" placeholder="First and last name" value="{{ form.name() }}" autocomplete="name" required />
         </div>
 
         <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
           <label for="username" class="w-fit pl-0.5 text-sm">Username</label>
-          <input id="username" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="username" placeholder="Username" value="{{ form.username }}" autocomplete="username" required />
+          <input id="username" type="text" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="username" placeholder="Username" value="{{ form.username() }}" autocomplete="username" required />
         </div>
 
         <div class="flex w-full flex-col gap-1 my-6 text-gray-800 dark:text-gray-300">
           <label for="email" class="w-fit pl-0.5 text-sm">Email</label>
-          <input id="email" type="email" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="email" placeholder="Email" value="{{ form.email }}" autocomplete="email" required />
+          <input id="email" type="email" class="w-full rounded-md border border-gray-500 bg-surface px-4 py-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 disabled:cursor-not-allowed disabled:opacity-75 dark:border-gray-500 dark:bg-surfaceDark dark:focus-visible:outline-sky-400" name="email" placeholder="Email" value="{{ form.email() }}" autocomplete="email" required />
         </div>
 
         <div class="flex w-full flex-col my-6 gap-1 text-gray-800 dark:text-gray-300">
@@ -58,7 +58,7 @@
         <div class="flex w-full mt-10 text-center flex-col gap-1">
           <button type="submit" class="mt-4 cursor-pointer whitespace-nowrap bg-sky-900 w-full px-3 py-4 text-center text-sm font-medium tracking-wide text-white transition hover:opacity-75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-900 active:opacity-100 active:outline-offset-0 dark:bg-sky-400 dark:text-black dark:focus-visible:outline-sky-400 rounded-md">Register</button>
         </div>
-        {% if let Some(next) = next %}
+        {% if let Some(next) = form.next() %}
         <input type="hidden" name="next" value="{{ next }}" />
         {% endif %}
       </form>

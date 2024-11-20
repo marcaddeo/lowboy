@@ -1,5 +1,7 @@
 use crate::{
     controller,
+    form::RegisterForm,
+    model::User,
     view::{
         auth::{Login, Register},
         Layout,
@@ -11,7 +13,11 @@ use axum::{
 };
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
-use lowboy::{App, AppContext, Connection, Context, Events, LowboyAuth};
+use lowboy::{
+    auth::{LowboyLoginForm, RegistrationDetails},
+    model::LowboyUserRecord,
+    App, AppContext, Connection, Context, Events, LowboyAuth,
+};
 use tokio_cron_scheduler::JobScheduler;
 
 #[derive(Clone)]
@@ -23,6 +29,7 @@ pub struct DemoContext {
     pub my_custom_thing: Vec<String>,
 }
 
+#[async_trait::async_trait]
 impl AppContext for DemoContext {
     fn create(
         database: Pool<Connection>,
@@ -35,6 +42,31 @@ impl AppContext for DemoContext {
             scheduler,
             my_custom_thing: vec![],
         })
+    }
+
+    async fn on_new_user(
+        &self,
+        record: &LowboyUserRecord,
+        details: RegistrationDetails,
+    ) -> anyhow::Result<()> {
+        let mut conn = self.database.get().await?;
+        let (name, avatar) = match details {
+            RegistrationDetails::Local(form) => {
+                let form = form.downcast_ref::<RegisterForm>().unwrap();
+                let (first_name, last_name) = form.name.split_once(' ').unwrap_or((&form.name, ""));
+                let avatar = format!(
+                    "https://avatar.iran.liara.run/username?username={}+{}",
+                    first_name, last_name
+                );
+                (form.name.clone(), avatar)
+            }
+            RegistrationDetails::GitHub(info) => (info.name, info.avatar_url),
+        };
+        User::new_record(record.id, &name)
+            .with_avatar(Some(&avatar))
+            .create(&mut conn)
+            .await?;
+        Ok(())
     }
 }
 
@@ -55,9 +87,12 @@ impl Context for DemoContext {
 pub struct Demo;
 
 impl App<DemoContext> for Demo {
-    type Layout = Layout;
-    type RegisterView = Register;
-    type LoginView = Login;
+    type Layout = Layout<Self::User>;
+    type RegisterView = Register<Self::RegistrationForm>;
+    type LoginView = Login<Self::LoginForm>;
+    type User = User;
+    type RegistrationForm = RegisterForm;
+    type LoginForm = LowboyLoginForm;
 
     fn name() -> &'static str {
         "demo"

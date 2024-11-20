@@ -6,33 +6,40 @@ use axum::{
     Form, Router,
 };
 use axum_messages::Messages;
-use derive_masked::{DebugMasked, DisplayMasked};
 use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use oauth2::CsrfToken;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tower_sessions::Session;
 use tracing::warn;
-use validator::Validate;
+use validator::{Validate, ValidationErrorsKind};
 
 use crate::{
     app,
-    auth::{LowboyLoginView as _, LowboyRegisterView},
-    model::{CredentialKind, Credentials, OAuthCredentials, User},
-    view::View,
-    AppContext, AuthSession,
+    auth::{
+        LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails, RegistrationForm,
+    },
+    context::CloneableAppContext,
+    lowboy_view,
+    model::{
+        CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation,
+        PasswordCredentials,
+    },
+    AuthSession,
 };
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";
-const REGISTRATION_FORM_KEY: &str = "auth.registration_form";
+const REGISTRATION_FORM_KEY: &str = "auth.registration-form";
+const LOGIN_FORM_KEY: &str = "auth.login-form";
 
-pub fn routes<App: app::App<AC>, AC: AppContext>() -> Router<AC> {
+pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
     Router::new()
         .route("/register", get(register_form::<App, AC>))
-        .route("/register", post(register::<AC>))
-        .route("/login", get(form::<App, AC>))
-        .route("/login", post(login))
-        .route("/login/oauth", get(oauth))
+        .route("/register", post(register::<App, AC>))
+        .route("/login", get(login_form::<App, AC>))
+        .route("/login", post(login::<App, AC>))
+        .route("/login/oauth/github", post(oauth_github::<App, AC>))
+        .route("/login/oauth/github/callback", get(oauth_github_callback))
         .route("/logout", get(logout))
 }
 
@@ -47,86 +54,70 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form<App: app::App<AC>, AC: AppContext>(
-    State(context): State<AC>,
-    Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
-    View(App::login_view(&context).set_next(next).clone())
-}
-
-pub async fn register_form<App: app::App<AC>, AC: AppContext>(
+pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
+    Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
     if user.is_some() {
-        return Redirect::to("/").into_response();
+        return Redirect::to(&next.unwrap_or("/".into())).into_response();
     }
 
-    let form: RegisterForm = session
+    let mut form = session
         .remove(REGISTRATION_FORM_KEY)
         .await
         .unwrap()
-        .unwrap_or_default();
+        .unwrap_or(App::RegistrationForm::empty());
 
-    View(App::register_view(&context).set_form(form).clone()).into_response()
+    form.set_next(next);
+
+    lowboy_view!(App::register_view(&context).set_form(form).clone(), {
+        "title" => "Register",
+    })
+    .into_response()
 }
 
-// @TODO figure out how to put this validation just on the NewModelRecords
-#[derive(Clone, DebugMasked, Deserialize, DisplayMasked, Validate, Default, Serialize)]
-pub struct RegisterForm {
-    #[validate(length(min = 1))]
-    pub name: String,
-    #[validate(length(min = 1, max = 32))]
-    pub username: String,
-    #[validate(email)]
-    pub email: String,
-    #[validate(length(min = 8))]
-    password: String,
-}
-
-pub async fn register<AC: AppContext>(
+pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
     mut messages: Messages,
-    Form(input): Form<RegisterForm>,
+    Form(input): Form<App::RegistrationForm>,
 ) -> impl IntoResponse {
     if user.is_some() {
-        return Redirect::to("/").into_response();
+        return Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response();
     }
 
     if let Err(validation) = input.validate() {
-        // @TODO just put these error messages in teh validation?
-        for (field, _) in validation.into_errors() {
-            let message = match field {
-                "name" => "Your name cannot be empty",
-                "username" => "Username must be between 1 and 32 characters",
-                "email" => "Email provided is not valid",
-                "password" => "Password must be at least 8 characters",
-                _ => "An unknown error occurred",
-            };
-            messages = messages.error(message);
+        for (_, info) in validation.into_errors() {
+            if let ValidationErrorsKind::Field(errors) = info {
+                for error in errors {
+                    messages = messages.error(error.to_string());
+                }
+            }
         }
 
-        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
-        return Redirect::to("/register").into_response();
+        session
+            .insert(REGISTRATION_FORM_KEY, input.clone())
+            .await
+            .unwrap();
+        return if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/register?next={next}"))
+        } else {
+            Redirect::to("/register")
+        }
+        .into_response();
     };
 
     let mut conn = context.database().get().await.unwrap();
 
-    let (first_name, last_name) = input.name.split_once(' ').unwrap_or((&input.name, ""));
-    let avatar = format!(
-        "https://avatar.iran.liara.run/username?username={}+{}",
-        first_name, last_name
-    );
-    let password = password_auth::generate_hash(&input.password);
-    let new_user = User::new_record(&input.username, &input.email).with_password(Some(&password));
-    let user = new_user
-        .create_or_update(&input.name, None, Some(&avatar), &mut conn)
-        .await;
+    let password = password_auth::generate_hash(input.password());
+    let new_user =
+        NewLowboyUserRecord::new(input.username(), input.email()).with_password(Some(&password));
+    let res = new_user.create_or_update(&mut conn).await;
 
-    match user {
+    match res {
         Ok(_) => messages.success("Registration successful! You can now log in."),
         Err(DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
             messages.error("A user with the same username or email already exists")
@@ -134,83 +125,131 @@ pub async fn register<AC: AppContext>(
         Err(_) => messages.error("An unknown error occurred"),
     };
 
-    if user.is_err() {
-        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
-        Redirect::to("/register")
+    if res.is_err() {
+        session
+            .insert(REGISTRATION_FORM_KEY, input.clone())
+            .await
+            .unwrap();
+        if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/register?next={next}"))
+        } else {
+            Redirect::to("/register")
+        }
     } else {
-        Redirect::to("/login")
+        if let (user, Operation::Create) = res.unwrap() {
+            context
+                .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
+                .await
+                .unwrap();
+        }
+
+        Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
     }
     .into_response()
 }
 
-pub async fn login(
-    mut auth_session: AuthSession,
+pub async fn login_form<App: app::App<AC>, AC: CloneableAppContext>(
+    State(context): State<AC>,
     session: Session,
-    messages: Messages,
-    Form(input): Form<Credentials>,
+    Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
-    match input.kind {
-        CredentialKind::Password => {
-            let credentials = input
-                .password
-                .as_ref()
-                .expect("CredentialKind::Password password field should not be none");
+    let mut form = session
+        .remove(LOGIN_FORM_KEY)
+        .await
+        .unwrap()
+        .unwrap_or(App::LoginForm::empty());
 
-            let user = match auth_session.authenticate(input.clone()).await {
-                Ok(Some(user)) => user,
-                Ok(None) => {
-                    messages.error("Invalid credentials");
+    form.set_next(next);
 
-                    let login_url = if let Some(next) = input.next {
-                        format!("/login?next={}", next)
-                    } else {
-                        "/login".to_string()
-                    };
-
-                    return Redirect::to(&login_url).into_response();
-                }
-                Err(e) => {
-                    warn!("Error authenticating user({}): {}", credentials.username, e);
-                    return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
-                }
-            };
-
-            match auth_session.login(&user).await {
-                Ok(_) => (),
-                Err(e) => {
-                    warn!("Error logging in user({}): {}", user.username, e);
-                    return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
-                }
-            }
-
-            messages.success(format!("Successfully logged in as {}", user.username));
-
-            if let Some(ref next) = input.next {
-                Redirect::to(next)
-            } else {
-                Redirect::to("/")
-            }
-            .into_response()
-        }
-        CredentialKind::OAuth => {
-            let (auth_url, csrf_state) = auth_session.backend.authorize_url();
-
-            session
-                .insert(CSRF_STATE_KEY, csrf_state.secret())
-                .await
-                .expect("Serialization should not fail");
-
-            session
-                .insert(NEXT_URL_KEY, input.next)
-                .await
-                .expect("Serialization should not fail");
-
-            Redirect::to(auth_url.as_str()).into_response()
-        }
-    }
+    lowboy_view!(App::login_view(&context).set_form(form).clone(), {
+        "title" => "Login",
+    })
 }
 
-pub async fn oauth(
+pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
+    mut auth_session: AuthSession,
+    session: Session,
+    mut messages: Messages,
+    Form(input): Form<App::LoginForm>,
+) -> impl IntoResponse {
+    session.insert(LOGIN_FORM_KEY, input.clone()).await.unwrap();
+
+    if let Err(validation) = input.validate() {
+        for (_, info) in validation.into_errors() {
+            if let ValidationErrorsKind::Field(errors) = info {
+                for error in errors {
+                    messages = messages.error(error.to_string());
+                }
+            }
+        }
+        return if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/login?next={next}"))
+        } else {
+            Redirect::to("/login")
+        }
+        .into_response();
+    }
+
+    let creds = Credentials {
+        kind: CredentialKind::Password,
+        password: Some(PasswordCredentials {
+            username: input.username().clone(),
+            password: input.password().clone(),
+        }),
+        oauth: None,
+        next: None,
+    };
+
+    let user = match auth_session.authenticate(creds).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            messages.error("Invalid credentials");
+
+            return if let Some(next) = input.next().to_owned() {
+                Redirect::to(&format!("/login?next={next}"))
+            } else {
+                Redirect::to("/login")
+            }
+            .into_response();
+        }
+        Err(e) => {
+            warn!("Error authenticating user({}): {}", input.username(), e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+        }
+    };
+
+    match auth_session.login(&user).await {
+        Ok(_) => (),
+        Err(e) => {
+            warn!("Error logging in user({}): {}", user.username, e);
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+        }
+    }
+
+    Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response()
+}
+
+pub async fn oauth_github<App: app::App<AC>, AC: CloneableAppContext>(
+    auth_session: AuthSession,
+    session: Session,
+    Form(input): Form<Credentials>,
+) -> impl IntoResponse {
+    let (auth_url, csrf_state) = auth_session.backend.authorize_url();
+
+    session
+        .insert(CSRF_STATE_KEY, csrf_state.secret())
+        .await
+        .expect("Serialization should not fail");
+
+    session
+        .insert(NEXT_URL_KEY, input.next)
+        .await
+        .expect("Serialization should not fail");
+
+    Redirect::to(auth_url.as_str()).into_response()
+}
+
+pub async fn oauth_github_callback(
     mut auth_session: AuthSession,
     messages: Messages,
     session: Session,
@@ -223,6 +262,10 @@ pub async fn oauth(
         return StatusCode::BAD_REQUEST.into_response();
     };
 
+    let Ok(next) = session.get(NEXT_URL_KEY).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
     let credentials = Credentials {
         kind: CredentialKind::OAuth,
         password: None,
@@ -231,15 +274,20 @@ pub async fn oauth(
             old_state,
             new_state,
         }),
-        next: None,
+        next: next.clone(),
     };
 
     let user = match auth_session.authenticate(credentials).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             messages.error("Invalid CSRF state");
-            // return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
-            return (StatusCode::UNAUTHORIZED, "").into_response();
+
+            return if let Some(next) = next.to_owned() {
+                Redirect::to(&format!("/login?next={next}"))
+            } else {
+                Redirect::to("/login")
+            }
+            .into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -248,11 +296,7 @@ pub async fn oauth(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY).await {
-        Redirect::to(&next).into_response()
-    } else {
-        Redirect::to("/").into_response()
-    }
+    Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response()
 }
 
 pub async fn logout(mut session: AuthSession) -> impl IntoResponse {
