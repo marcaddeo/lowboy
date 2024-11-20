@@ -1,5 +1,1 @@
-/.env
 /target
-/node_modules
-/static/dist
-!/static/dist/.gitkeep
