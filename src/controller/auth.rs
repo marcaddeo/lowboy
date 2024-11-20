@@ -262,7 +262,7 @@ pub async fn oauth_github_callback(
         return StatusCode::BAD_REQUEST.into_response();
     };
 
-    let Ok(next) = session.get(NEXT_URL_KEY).await else {
+    let Ok(Some(next)) = session.get::<Option<String>>(NEXT_URL_KEY).await else {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     };
 
