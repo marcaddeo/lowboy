@@ -1,11 +1,13 @@
 use anyhow::Result;
 use axum::response::sse::Event;
 use diesel::sqlite::SqliteConnection;
-use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
+use diesel_async::pooled_connection::{deadpool::Pool, ManagerConfig};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use diesel_async::{AsyncConnection, SimpleAsyncConnection};
 use dyn_clone::DynClone;
 use flume::{Receiver, Sender};
+use futures::FutureExt;
 use tokio_cron_scheduler::JobScheduler;
 
 use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
@@ -72,11 +74,31 @@ pub async fn create_context<AC: AppContext>() -> Result<AC> {
     let database =
         xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
-    let config = AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new(
-        database.to_str().expect("database path should be valid"),
-    );
+    let mut manager_config = ManagerConfig::default();
+    manager_config.custom_setup = Box::new(|url| {
+        async {
+            let mut conn = SyncConnectionWrapper::<SqliteConnection>::establish(url).await?;
 
-    let database = Pool::builder(config).build().unwrap();
+            let query = "
+            PRAGMA journal_mode = WAL;
+            PRAGMA synchronous = NORMAL;
+            PRAGMA foreign_keys = ON;
+            PRAGMA busy_timeout = 30000;
+            ";
+            conn.batch_execute(query).await.unwrap(); // @TODO
+
+            Ok(conn)
+        }
+        .boxed()
+    });
+
+    let manager =
+        AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new_with_config(
+            database.to_str().expect("database path should be valid"),
+            manager_config,
+        );
+
+    let database = Pool::builder(manager).max_size(16).build().unwrap();
 
     let events = flume::bounded::<Event>(32);
 
