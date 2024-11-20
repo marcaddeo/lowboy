@@ -673,6 +673,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "diesel-tracing"
+version = "0.3.1"
+source = "git+https://github.com/marcaddeo/diesel-tracing?branch=feat/diesel-instrumentation-module-support#b2e2d886d0c7c0c3545e20fd99140e67ea0d9dc7"
+dependencies = [
+ "diesel",
+ "tracing",
+]
+
+[[package]]
 name = "diesel_derives"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1682,6 +1691,7 @@ dependencies = [
  "derive_more",
  "diesel",
  "diesel-async",
+ "diesel-tracing",
  "diesel_migrations",
  "dotenvy",
  "dyn-clone",

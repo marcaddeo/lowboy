@@ -74,6 +74,10 @@ pub async fn create_context<AC: AppContext>() -> Result<AC> {
     let database =
         xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
+    diesel::connection::set_default_instrumentation(|| {
+        Some(Box::new(diesel_tracing::TracingInstrumentation::new(true)))
+    })?;
+
     let mut manager_config = ManagerConfig::default();
     manager_config.custom_setup = Box::new(|url| {
         async {
