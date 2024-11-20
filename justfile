@@ -14,28 +14,3 @@ alias e := edit
 # Edit the justfile
 @edit:
     $EDITOR "{{ justfile() }}"
-
-_ensure_node_modules:
-    test -d node_modules || npm install
-
-build-js: _ensure_node_modules
-    npm run build:js
-
-build-css: _ensure_node_modules
-    npm run build:css
-
-build-rs:
-    cargo build
-
-alias b := build
-# Build project
-build: build-js build-css build-rs
-
-alias w := build
-[doc("Watch & build project")]
-watch:
-    #!/usr/bin/env bash
-    cargo watch -x run &
-    server_pid="$!"
-    trap "kill $server_pid; exit" SIGINT
-    npm run watch
