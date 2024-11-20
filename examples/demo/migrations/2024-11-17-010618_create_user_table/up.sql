@@ -4,7 +4,8 @@ CREATE TABLE IF NOT EXISTS user (
     lowboy_user_id INTEGER NOT NULL UNIQUE,
     name TEXT NOT NULL,
     avatar TEXT,
-    byline TEXT
+    byline TEXT,
+    FOREIGN KEY(lowboy_user_id) REFERENCES lowboy_user(id)
 );
 
 -- Add admin user data.
