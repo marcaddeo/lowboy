@@ -1,9 +1,11 @@
 use super::User;
-use crate::model::UserRecord;
-use crate::schema::post;
-use diesel::prelude::*;
+use crate::schema::{lowboy_user, post};
+use crate::{model::UserRecord, schema::user};
+use diesel::sqlite::Sqlite;
+use diesel::{debug_query, prelude::*};
 use diesel_async::RunQueryDsl;
-use lowboy::{model::LowboyUserRecord, Connection};
+use lowboy::model::{LowboyUser, LowboyUserRecord};
+use lowboy::Connection;
 use lowboy_record::prelude::*;
 
 #[apply(lowboy_record!)]
@@ -25,14 +27,33 @@ impl Post {
 
     pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
         let records = post::table
-            .select(PostRecord::as_select())
+            .inner_join(user::table.inner_join(lowboy_user::table))
             .limit(limit.unwrap_or(100))
-            .load(conn)
+            .order_by(post::id.desc())
+            .load::<(PostRecord, (UserRecord, LowboyUserRecord))>(conn)
             .await?;
         let mut posts = vec![];
 
-        for record in &records {
-            posts.push(Self::from_record(record, conn).await?);
+        for (post_record, (user_record, lowboy_user_record)) in &records {
+            let post = Post {
+                id: post_record.id,
+                user: User {
+                    id: user_record.id,
+                    lowboy_user: LowboyUser {
+                        id: lowboy_user_record.id,
+                        username: lowboy_user_record.username.clone(),
+                        email: lowboy_user_record.email.clone(),
+                        password: None,
+                        access_token: None,
+                    },
+                    name: user_record.name.clone(),
+                    avatar: user_record.avatar.clone(),
+                    byline: user_record.byline.clone(),
+                },
+                content: post_record.content.clone(),
+            };
+
+            posts.push(post);
         }
 
         Ok(posts)

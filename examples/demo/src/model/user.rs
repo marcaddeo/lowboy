@@ -16,7 +16,7 @@ pub trait DemoUser {
 }
 
 #[apply(lowboy_record!)]
-#[derive(Debug, Default, Queryable, Identifiable, Associations)]
+#[derive(Debug, Default, Queryable, Selectable, Identifiable, Associations)]
 #[diesel(belongs_to(LowboyUserRecord, foreign_key = lowboy_user_id))]
 #[diesel(table_name = crate::schema::user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
