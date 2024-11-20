@@ -36,10 +36,10 @@ pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
     Router::new()
         .route("/register", get(register_form::<App, AC>))
         .route("/register", post(register::<App, AC>))
-        .route("/login", get(form::<App, AC>))
+        .route("/login", get(login_form::<App, AC>))
         .route("/login", post(login::<App, AC>))
-        .route("/login/oauth", get(oauth))
-        .route("/login/oauth/github", post(login_github_oauth::<App, AC>))
+        .route("/login/oauth/github", post(oauth_github::<App, AC>))
+        .route("/login/oauth/github/callback", get(oauth_github_callback))
         .route("/logout", get(logout))
 }
 
@@ -54,38 +54,23 @@ pub struct AuthzResp {
     state: CsrfToken,
 }
 
-pub async fn form<App: app::App<AC>, AC: CloneableAppContext>(
-    State(context): State<AC>,
-    session: Session,
-    Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
-    let mut form = session
-        .remove(LOGIN_FORM_KEY)
-        .await
-        .unwrap()
-        .unwrap_or(App::LoginForm::empty());
-
-    form.set_next(next);
-
-    lowboy_view!(App::login_view(&context).set_form(form).clone(), {
-        "title" => "Login",
-    })
-}
-
 pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     AuthSession { user, .. }: AuthSession,
     session: Session,
+    Query(NextUrl { next }): Query<NextUrl>,
 ) -> impl IntoResponse {
     if user.is_some() {
-        return Redirect::to("/").into_response();
+        return Redirect::to(&next.unwrap_or("/".into())).into_response();
     }
 
-    let form = session
+    let mut form = session
         .remove(REGISTRATION_FORM_KEY)
         .await
         .unwrap()
         .unwrap_or(App::RegistrationForm::empty());
+
+    form.set_next(next);
 
     lowboy_view!(App::register_view(&context).set_form(form).clone(), {
         "title" => "Register",
@@ -101,7 +86,7 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     Form(input): Form<App::RegistrationForm>,
 ) -> impl IntoResponse {
     if user.is_some() {
-        return Redirect::to("/").into_response();
+        return Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response();
     }
 
     if let Err(validation) = input.validate() {
@@ -113,8 +98,16 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
             }
         }
 
-        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
-        return Redirect::to("/register").into_response();
+        session
+            .insert(REGISTRATION_FORM_KEY, input.clone())
+            .await
+            .unwrap();
+        return if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/register?next={next}"))
+        } else {
+            Redirect::to("/register")
+        }
+        .into_response();
     };
 
     let mut conn = context.database().get().await.unwrap();
@@ -133,8 +126,15 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     };
 
     if res.is_err() {
-        session.insert(REGISTRATION_FORM_KEY, input).await.unwrap();
-        Redirect::to("/register")
+        session
+            .insert(REGISTRATION_FORM_KEY, input.clone())
+            .await
+            .unwrap();
+        if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/register?next={next}"))
+        } else {
+            Redirect::to("/register")
+        }
     } else {
         if let (user, Operation::Create) = res.unwrap() {
             context
@@ -143,9 +143,27 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
                 .unwrap();
         }
 
-        Redirect::to("/login")
+        Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
     }
     .into_response()
+}
+
+pub async fn login_form<App: app::App<AC>, AC: CloneableAppContext>(
+    State(context): State<AC>,
+    session: Session,
+    Query(NextUrl { next }): Query<NextUrl>,
+) -> impl IntoResponse {
+    let mut form = session
+        .remove(LOGIN_FORM_KEY)
+        .await
+        .unwrap()
+        .unwrap_or(App::LoginForm::empty());
+
+    form.set_next(next);
+
+    lowboy_view!(App::login_view(&context).set_form(form).clone(), {
+        "title" => "Login",
+    })
 }
 
 pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
@@ -164,7 +182,12 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
                 }
             }
         }
-        return Redirect::to("/login").into_response();
+        return if let Some(next) = input.next().to_owned() {
+            Redirect::to(&format!("/login?next={next}"))
+        } else {
+            Redirect::to("/login")
+        }
+        .into_response();
     }
 
     let creds = Credentials {
@@ -182,13 +205,12 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
         Ok(None) => {
             messages.error("Invalid credentials");
 
-            let login_url = if let Some(next) = input.next() {
-                format!("/login?next={}", next)
+            return if let Some(next) = input.next().to_owned() {
+                Redirect::to(&format!("/login?next={next}"))
             } else {
-                "/login".to_string()
-            };
-
-            return Redirect::to(&login_url).into_response();
+                Redirect::to("/login")
+            }
+            .into_response();
         }
         Err(e) => {
             warn!("Error authenticating user({}): {}", input.username(), e);
@@ -204,17 +226,10 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
         }
     }
 
-    messages.success(format!("Successfully logged in as {}", user.username));
-
-    if let Some(ref next) = input.next() {
-        Redirect::to(next)
-    } else {
-        Redirect::to("/")
-    }
-    .into_response()
+    Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response()
 }
 
-pub async fn login_github_oauth<App: app::App<AC>, AC: CloneableAppContext>(
+pub async fn oauth_github<App: app::App<AC>, AC: CloneableAppContext>(
     auth_session: AuthSession,
     session: Session,
     Form(input): Form<Credentials>,
@@ -234,7 +249,7 @@ pub async fn login_github_oauth<App: app::App<AC>, AC: CloneableAppContext>(
     Redirect::to(auth_url.as_str()).into_response()
 }
 
-pub async fn oauth(
+pub async fn oauth_github_callback(
     mut auth_session: AuthSession,
     messages: Messages,
     session: Session,
@@ -259,15 +274,20 @@ pub async fn oauth(
             old_state,
             new_state,
         }),
-        next,
+        next: next.clone(),
     };
 
     let user = match auth_session.authenticate(credentials).await {
         Ok(Some(user)) => user,
         Ok(None) => {
             messages.error("Invalid CSRF state");
-            // return (StatusCode::UNAUTHORIZED, view::Login { next: None }).into_response();
-            return (StatusCode::UNAUTHORIZED, "").into_response();
+
+            return if let Some(next) = next.to_owned() {
+                Redirect::to(&format!("/login?next={next}"))
+            } else {
+                Redirect::to("/login")
+            }
+            .into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
     };
@@ -276,11 +296,7 @@ pub async fn oauth(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    if let Ok(Some(next)) = session.remove::<String>(NEXT_URL_KEY).await {
-        Redirect::to(&next).into_response()
-    } else {
-        Redirect::to("/").into_response()
-    }
+    Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response()
 }
 
 pub async fn logout(mut session: AuthSession) -> impl IntoResponse {
