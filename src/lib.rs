@@ -1,5 +1,13 @@
 use anyhow::Result;
-use axum::{middleware, response::sse::Event, routing::get, Router};
+use axum::{
+    extract::{FromRef, FromRequestParts},
+    http::request::Parts,
+    http::StatusCode,
+    middleware,
+    response::sse::Event,
+    routing::get,
+    Router,
+};
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -12,7 +20,10 @@ use diesel::{
     sqlite::{Sqlite, SqliteConnection},
     QueryResult,
 };
-use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
+use diesel_async::{
+    pooled_connection::deadpool::{Object, Pool},
+    sync_connection_wrapper::SyncConnectionWrapper,
+};
 use diesel_migrations::{
     embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
 };
@@ -168,35 +179,38 @@ pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
     }
 }
 
-// use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-// pub struct DatabaseConnection(
-//     pub  deadpool::managed::Object<
-//         AsyncDieselConnectionManager<SyncConnectionWrapper<diesel::SqliteConnection>>,
-//     >,
-// );
-//
-// #[async_trait]
-// impl<S, T> FromRequestParts<S> for DatabaseConnection
-// where
-//     S: Send + Sync,
-//     T: FromRef<S> + AppContext,
-// {
-//     type Rejection = (StatusCode, String);
-//
-//     async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-//         let app = AppContext::from_ref(state);
-//         let conn = app.database().get().await.map_err(internal_error)?;
-//
-//         Ok(Self(conn))
-//     }
-// }
-//
-// fn internal_error<E>(err: E) -> (StatusCode, String)
-// where
-//     E: std::error::Error,
-// {
-//     (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-// }
+pub struct DbPool(pub Pool<Connection>);
+
+impl<T: AppContext + Clone> FromRef<T> for DbPool {
+    fn from_ref(input: &T) -> Self {
+        Self(input.database().clone())
+    }
+}
+
+pub struct DatabaseConnection(pub Object<Connection>);
+
+#[async_trait::async_trait]
+impl<S> FromRequestParts<S> for DatabaseConnection
+where
+    S: Send + Sync + AppContext,
+    DbPool: FromRef<S>,
+{
+    type Rejection = (StatusCode, String);
+
+    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let DbPool(pool) = DbPool::from_ref(state);
+        let conn = pool.get().await.map_err(internal_error)?;
+
+        Ok(Self(conn))
+    }
+}
+
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+}
 
 #[cfg(debug_assertions)]
 fn not_htmx_predicate(req: &axum::extract::Request) -> bool {

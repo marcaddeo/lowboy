@@ -70,6 +70,35 @@ impl AppContext for LowboyContext {
     }
 }
 
+// These implementations were necessary to make extractors work. I'm pretty sure these are actually
+// unreachable, hopefully 😅
+impl Context for () {
+    fn database(&self) -> &Pool<Connection> {
+        unreachable!()
+    }
+
+    fn events(&self) -> &Events {
+        unreachable!()
+    }
+
+    fn scheduler(&self) -> &JobScheduler {
+        unreachable!()
+    }
+}
+
+impl AppContext for () {
+    fn create(
+        _database: Pool<Connection>,
+        _events: Events,
+        _scheduler: JobScheduler,
+    ) -> Result<Self>
+    where
+        Self: Sized,
+    {
+        unreachable!()
+    }
+}
+
 pub async fn create_context<AC: AppContext>() -> Result<AC> {
     let database =
         xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
@@ -106,7 +135,7 @@ pub async fn create_context<AC: AppContext>() -> Result<AC> {
 
     let events = flume::bounded::<Event>(32);
 
-    let scheduler = tokio_cron_scheduler::JobScheduler::new()
+    let scheduler = JobScheduler::new()
         .await
         .expect("job scheduler should be created");
     scheduler.start().await.expect("scheduler should start");
