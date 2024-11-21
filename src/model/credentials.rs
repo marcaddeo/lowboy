@@ -1,10 +1,12 @@
+use crate::auth::IdentityProvider;
 use oauth2::CsrfToken;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub enum CredentialKind {
     Password,
-    OAuth,
+    #[serde(untagged)]
+    OAuth(IdentityProvider),
 }
 
 #[derive(Debug, Clone, Deserialize)]

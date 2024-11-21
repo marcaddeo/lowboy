@@ -16,7 +16,8 @@ use validator::{Validate, ValidationErrorsKind};
 use crate::{
     app,
     auth::{
-        LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails, RegistrationForm,
+        IdentityProvider, LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails,
+        RegistrationForm,
     },
     context::CloneableAppContext,
     lowboy_view,
@@ -40,6 +41,8 @@ pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
         .route("/login", post(login::<App, AC>))
         .route("/login/oauth/github", post(oauth_github::<App, AC>))
         .route("/login/oauth/github/callback", get(oauth_github_callback))
+        .route("/login/oauth/discord", post(oauth_discord::<App, AC>))
+        .route("/login/oauth/discord/callback", get(oauth_discord_callback))
         .route("/logout", get(logout))
 }
 
@@ -234,7 +237,10 @@ pub async fn oauth_github<App: app::App<AC>, AC: CloneableAppContext>(
     session: Session,
     Form(input): Form<Credentials>,
 ) -> impl IntoResponse {
-    let (auth_url, csrf_state) = auth_session.backend.authorize_url();
+    let (auth_url, csrf_state) = auth_session
+        .backend
+        .authorize_url(&IdentityProvider::GitHub)
+        .unwrap();
 
     session
         .insert(CSRF_STATE_KEY, csrf_state.secret())
@@ -267,7 +273,7 @@ pub async fn oauth_github_callback(
     };
 
     let credentials = Credentials {
-        kind: CredentialKind::OAuth,
+        kind: CredentialKind::OAuth(IdentityProvider::GitHub),
         password: None,
         oauth: Some(OAuthCredentials {
             code,
@@ -290,6 +296,82 @@ pub async fn oauth_github_callback(
             .into_response();
         }
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if auth_session.login(&user).await.is_err() {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response()
+}
+
+pub async fn oauth_discord<App: app::App<AC>, AC: CloneableAppContext>(
+    auth_session: AuthSession,
+    session: Session,
+    Form(input): Form<Credentials>,
+) -> impl IntoResponse {
+    let (auth_url, csrf_state) = auth_session
+        .backend
+        .authorize_url(&IdentityProvider::Discord)
+        .unwrap();
+
+    session
+        .insert(CSRF_STATE_KEY, csrf_state.secret())
+        .await
+        .expect("Serialization should not fail");
+
+    session
+        .insert(NEXT_URL_KEY, input.next)
+        .await
+        .expect("Serialization should not fail");
+
+    Redirect::to(auth_url.as_str()).into_response()
+}
+
+pub async fn oauth_discord_callback(
+    mut auth_session: AuthSession,
+    messages: Messages,
+    session: Session,
+    Query(AuthzResp {
+        code,
+        state: new_state,
+    }): Query<AuthzResp>,
+) -> impl IntoResponse {
+    let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY).await else {
+        return StatusCode::BAD_REQUEST.into_response();
+    };
+
+    let Ok(Some(next)) = session.get::<Option<String>>(NEXT_URL_KEY).await else {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    };
+
+    let credentials = Credentials {
+        kind: CredentialKind::OAuth(IdentityProvider::Discord),
+        password: None,
+        oauth: Some(OAuthCredentials {
+            code,
+            old_state,
+            new_state,
+        }),
+        next: next.clone(),
+    };
+
+    let user = match auth_session.authenticate(credentials).await {
+        Ok(Some(user)) => user,
+        Ok(None) => {
+            messages.error("Invalid CSRF state");
+
+            return if let Some(next) = next.to_owned() {
+                Redirect::to(&format!("/login?next={next}"))
+            } else {
+                Redirect::to("/login")
+            }
+            .into_response();
+        }
+        Err(e) => {
+            warn!("Error authenticating user with Discord: {e}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     };
 
     if auth_session.login(&user).await.is_err() {
