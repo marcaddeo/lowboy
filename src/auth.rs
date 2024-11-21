@@ -1,6 +1,4 @@
 #![allow(clippy::transmute_ptr_to_ref)]
-use std::collections::HashMap;
-
 use crate::{
     model::{
         CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
@@ -25,6 +23,7 @@ use oauth2::{
 };
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use validator::Validate;
 
 pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
@@ -159,6 +158,45 @@ pub enum RegistrationDetails {
     Local(Box<dyn RegistrationForm>),
 }
 
+#[derive(Clone, Debug)]
+pub struct IdentityProviderConfig {
+    auth_url: String,
+    token_url: String,
+    callback: String,
+    scopes: Vec<Scope>,
+    extra_params: Vec<(String, String)>,
+}
+
+impl IdentityProviderConfig {
+    pub fn new(
+        auth_url: impl Into<String>,
+        token_url: impl Into<String>,
+        callback: impl Into<String>,
+    ) -> Self {
+        Self {
+            auth_url: auth_url.into(),
+            token_url: token_url.into(),
+            callback: callback.into(),
+            scopes: vec![],
+            extra_params: vec![],
+        }
+    }
+
+    pub fn with_scopes(self, scopes: Vec<Scope>) -> Self {
+        Self { scopes, ..self }
+    }
+
+    pub fn with_extra_params(self, extra_params: Vec<(&str, &str)>) -> Self {
+        Self {
+            extra_params: extra_params
+                .into_iter()
+                .map(|(name, value)| (name.to_string(), value.to_string()))
+                .collect(),
+            ..self
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq)]
 #[serde(into = "String")]
 pub enum IdentityProvider {
@@ -166,34 +204,34 @@ pub enum IdentityProvider {
     Discord,
 }
 
-impl TryFrom<IdentityProvider> for (AuthUrl, TokenUrl, &str, Vec<Scope>) {
-    type Error = oauth2::url::ParseError;
-
-    fn try_from(value: IdentityProvider) -> std::prelude::v1::Result<Self, Self::Error> {
+impl From<IdentityProvider> for IdentityProviderConfig {
+    fn from(value: IdentityProvider) -> Self {
         use IdentityProvider::*;
-        Ok(match value {
-            GitHub => (
-                AuthUrl::new("https://github.com/login/oauth/authorize".to_string())?,
-                TokenUrl::new("https://github.com/login/oauth/access_token".to_string())?,
+
+        match value {
+            GitHub => IdentityProviderConfig::new(
+                "https://github.com/login/oauth/authorize",
+                "https://github.com/login/oauth/access_token",
                 "/login/oauth/github/callback",
-                vec![],
             ),
-            Discord => (
-                AuthUrl::new("https://discord.com/oauth2/authorize".to_string())?,
-                TokenUrl::new("https://discord.com/api/oauth2/token".to_string())?,
+
+            Discord => IdentityProviderConfig::new(
+                "https://discord.com/oauth2/authorize",
+                "https://discord.com/api/oauth2/token",
                 "/login/oauth/discord/callback",
-                vec![
-                    Scope::new("identify".to_string()),
-                    Scope::new("email".to_string()),
-                ],
-            ),
-        })
+            )
+            .with_scopes(vec![
+                Scope::new("identify".to_string()),
+                Scope::new("email".to_string()),
+            ])
+            .with_extra_params(vec![("prompt", "none")]),
+        }
     }
 }
 
 #[derive(Clone, Default)]
 pub struct OAuthClientManager {
-    clients: HashMap<IdentityProvider, (BasicClient, Vec<Scope>)>,
+    clients: HashMap<IdentityProvider, (BasicClient, IdentityProviderConfig)>,
 }
 
 impl OAuthClientManager {
@@ -214,7 +252,7 @@ impl OAuthClientManager {
         self.create_client(IdentityProvider::Discord, client_id, client_secret)
     }
 
-    pub fn get(&self, idp: &IdentityProvider) -> Option<&(BasicClient, Vec<Scope>)> {
+    pub fn get(&self, idp: &IdentityProvider) -> Option<&(BasicClient, IdentityProviderConfig)> {
         self.clients.get(idp)
     }
 
@@ -224,18 +262,19 @@ impl OAuthClientManager {
         client_id: String,
         client_secret: String,
     ) -> Result<Self> {
-        let (auth_url, token_url, redirect_url, scopes) = idp.clone().try_into()?;
+        let config: IdentityProviderConfig = idp.clone().into();
         let client = BasicClient::new(
             ClientId::new(client_id),
             Some(ClientSecret::new(client_secret)),
-            auth_url,
-            Some(token_url),
+            AuthUrl::new(config.auth_url.to_string())?,
+            Some(TokenUrl::new(config.token_url.to_string())?),
         )
         .set_redirect_uri(RedirectUrl::new(format!(
-            "http://localhost:3000{redirect_url}"
+            "http://localhost:3000{}",
+            config.callback
         ))?);
 
-        self.clients.insert(idp, (client, scopes));
+        self.clients.insert(idp, (client, config));
         Ok(self)
     }
 }
@@ -266,11 +305,14 @@ impl LowboyAuth {
     }
 
     pub fn authorize_url(&self, idp: &IdentityProvider) -> Option<(Url, CsrfToken)> {
-        let (client, scopes) = self.oauth.get(idp)?;
+        let (client, config) = self.oauth.get(idp)?;
 
-        let mut auth_url = client.authorize_url(CsrfToken::new_random);
-        for scope in scopes {
-            auth_url = auth_url.add_scope(scope.to_owned());
+        let mut auth_url = client
+            .authorize_url(CsrfToken::new_random)
+            .add_scopes(config.scopes.clone());
+
+        for (name, value) in &config.extra_params {
+            auth_url = auth_url.add_extra_param(name, value);
         }
 
         Some(auth_url.url())
