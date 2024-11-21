@@ -32,3 +32,27 @@ impl<T: AppContext> FromRef<T> for DatabasePool {
         Self(input.database().clone())
     }
 }
+
+pub struct JobScheduler(pub tokio_cron_scheduler::JobScheduler);
+
+#[async_trait::async_trait]
+impl<S> FromRequestParts<S> for JobScheduler
+where
+    S: Send + Sync + AppContext,
+    JobSchedulerInstance: FromRef<S>,
+{
+    type Rejection = ();
+
+    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let JobSchedulerInstance(instance) = JobSchedulerInstance::from_ref(state);
+        Ok(Self(instance))
+    }
+}
+
+struct JobSchedulerInstance(tokio_cron_scheduler::JobScheduler);
+
+impl<T: AppContext> FromRef<T> for JobSchedulerInstance {
+    fn from_ref(input: &T) -> Self {
+        Self(input.scheduler().clone())
+    }
+}
