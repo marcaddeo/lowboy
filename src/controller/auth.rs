@@ -43,12 +43,22 @@ pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
         .route("/login/oauth/github/callback", get(oauth_github_callback))
         .route("/login/oauth/discord", post(oauth_discord::<App, AC>))
         .route("/login/oauth/discord/callback", get(oauth_discord_callback))
+        .route(
+            "/login/oauth/discord/authorize",
+            get(oauth_discord_authorize),
+        )
         .route("/logout", get(logout))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct NextUrl {
     next: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+pub struct CallbackResp {
+    code: String,
+    state: String,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -329,6 +339,26 @@ pub async fn oauth_discord<App: app::App<AC>, AC: CloneableAppContext>(
 }
 
 pub async fn oauth_discord_callback(
+    Query(CallbackResp { code, state }): Query<CallbackResp>,
+) -> impl IntoResponse {
+    let destination = format!("/login/oauth/discord/authorize?code={code}&state={state}");
+    let html = format!(
+        r#"
+        <script type="text/javascript">
+            window.location = "{destination}";
+        </script>
+        <noscript>
+            <meta http-equiv="refresh" content="0;URL='{destination}'"/>
+        </noscript>
+        "#
+    );
+
+    lowboy_view!(html, {
+        "title" => "Redirecting...",
+    })
+}
+
+pub async fn oauth_discord_authorize(
     mut auth_session: AuthSession,
     messages: Messages,
     session: Session,

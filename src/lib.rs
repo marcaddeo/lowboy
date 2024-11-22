@@ -107,7 +107,6 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false) // @TODO
-            .with_same_site(cookie::SameSite::Lax)
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
             .with_signed(session_key);
 
