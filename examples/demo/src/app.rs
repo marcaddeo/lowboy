@@ -61,7 +61,15 @@ impl AppContext for DemoContext {
                 (form.name.clone(), Some(avatar))
             }
             RegistrationDetails::GitHub(info) => (info.name, Some(info.avatar_url)),
-            RegistrationDetails::Discord(info) => (info.username, info.avatar),
+            RegistrationDetails::Discord(info) => (
+                info.username,
+                info.avatar.map(|hash| {
+                    format!(
+                        "https://cdn.discordapp.com/avatars/{}/{}.png?size=256",
+                        info.id, hash
+                    )
+                }),
+            ),
         };
         User::new_record(record.id, &name)
             .with_avatar(avatar.as_deref())

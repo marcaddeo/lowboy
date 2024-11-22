@@ -350,6 +350,7 @@ pub struct GitHubUserInfo {
 
 #[derive(Debug, Deserialize)]
 pub struct DiscordUserInfo {
+    pub id: String,
     pub username: String,
     pub email: Option<String>,
     pub global_name: String,
