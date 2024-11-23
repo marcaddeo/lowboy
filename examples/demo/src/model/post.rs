@@ -1,8 +1,7 @@
 use super::User;
 use crate::schema::{lowboy_user, post};
 use crate::{model::UserRecord, schema::user};
-use diesel::sqlite::Sqlite;
-use diesel::{debug_query, prelude::*};
+use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{LowboyUser, LowboyUserRecord};
 use lowboy::Connection;
