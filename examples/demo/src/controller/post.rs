@@ -4,7 +4,7 @@ use crate::{
     view,
 };
 use axum::extract::Form;
-use lowboy::extractor::{AppUser, DatabaseConnection};
+use lowboy::extract::{AppUser, DatabaseConnection};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]

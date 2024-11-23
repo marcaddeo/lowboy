@@ -29,7 +29,7 @@ pub mod auth;
 mod context;
 pub mod controller;
 mod diesel_sqlite_session_store;
-pub mod extractor;
+pub mod extract;
 pub mod model;
 mod schema;
 pub mod view;

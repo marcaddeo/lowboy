@@ -1,6 +1,6 @@
 use crate::{model::Post, view::Home};
 use axum::response::IntoResponse;
-use lowboy::{extractor::DatabaseConnection, lowboy_view};
+use lowboy::{extract::DatabaseConnection, lowboy_view};
 
 #[axum::debug_handler]
 pub async fn home(DatabaseConnection(mut conn): DatabaseConnection) -> impl IntoResponse {
