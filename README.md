@@ -1,4 +1,8 @@
-<h1 align="center"><img src="logo.png" width="250px" alt="lowboy" /></h1>
+<h1 align="center">
+  <a name="logo">
+    <img src="logo.png" width="250px" alt="lowboy" />
+  </a>
+</h1>
 
 <div align="center">
  <strong>A low-js modern trad-style micro-whatchamacallit</strong>
