@@ -18,7 +18,7 @@ use oauth2::{
     http::header::{AUTHORIZATION, USER_AGENT},
     reqwest::{async_http_client, AsyncHttpClientError},
     url::Url,
-    AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
+    AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
 use password_auth::verify_password;
@@ -160,23 +160,19 @@ pub enum RegistrationDetails {
 
 #[derive(Clone, Debug)]
 pub struct IdentityProviderConfig {
-    auth_url: String,
-    token_url: String,
-    callback: String,
-    scopes: Vec<Scope>,
-    extra_params: Vec<(String, String)>,
+    pub auth_url: String,
+    pub token_url: String,
+    pub intermediary_redirect: bool,
+    pub scopes: Vec<Scope>,
+    pub extra_params: Vec<(String, String)>,
 }
 
 impl IdentityProviderConfig {
-    pub fn new(
-        auth_url: impl Into<String>,
-        token_url: impl Into<String>,
-        callback: impl Into<String>,
-    ) -> Self {
+    pub fn new(auth_url: impl Into<String>, token_url: impl Into<String>) -> Self {
         Self {
             auth_url: auth_url.into(),
             token_url: token_url.into(),
-            callback: callback.into(),
+            intermediary_redirect: false,
             scopes: vec![],
             extra_params: vec![],
         }
@@ -195,13 +191,63 @@ impl IdentityProviderConfig {
             ..self
         }
     }
+
+    pub fn with_intermediary_redirect(self, intermediary_redirect: bool) -> Self {
+        Self {
+            intermediary_redirect,
+            ..self
+        }
+    }
 }
 
-#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq, strum::Display)]
 #[serde(into = "String")]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum IdentityProvider {
     GitHub,
     Discord,
+}
+
+impl IdentityProvider {
+    pub async fn fetch_registration_details(
+        &self,
+        token: &AccessToken,
+    ) -> Result<RegistrationDetails, Error> {
+        use IdentityProvider::*;
+
+        match *self {
+            GitHub => {
+                let details = reqwest::Client::new()
+                    .get("https://api.github.com/user")
+                    .header(USER_AGENT.as_str(), "lowboy")
+                    .header(AUTHORIZATION.as_str(), format!("Bearer {}", token.secret()))
+                    .send()
+                    .await
+                    .map_err(Error::Reqwest)?
+                    .json::<GitHubUserInfo>()
+                    .await
+                    .map_err(Error::Reqwest)?;
+
+                Ok(RegistrationDetails::GitHub(details))
+            }
+
+            Discord => {
+                let details = reqwest::Client::new()
+                    .get("https://discord.com/api/users/@me")
+                    .header(USER_AGENT.as_str(), "lowboy")
+                    .header(AUTHORIZATION.as_str(), format!("Bearer {}", token.secret()))
+                    .send()
+                    .await
+                    .map_err(Error::Reqwest)?
+                    .json::<DiscordUserInfo>()
+                    .await
+                    .map_err(Error::Reqwest)?;
+
+                Ok(RegistrationDetails::Discord(details))
+            }
+        }
+    }
 }
 
 impl From<IdentityProvider> for IdentityProviderConfig {
@@ -212,14 +258,13 @@ impl From<IdentityProvider> for IdentityProviderConfig {
             GitHub => IdentityProviderConfig::new(
                 "https://github.com/login/oauth/authorize",
                 "https://github.com/login/oauth/access_token",
-                "/login/oauth/github/callback",
             ),
 
             Discord => IdentityProviderConfig::new(
                 "https://discord.com/oauth2/authorize",
                 "https://discord.com/api/oauth2/token",
-                "/login/oauth/discord/callback",
             )
+            .with_intermediary_redirect(true)
             .with_scopes(vec![
                 Scope::new("identify".to_string()),
                 Scope::new("email".to_string()),
@@ -258,11 +303,11 @@ impl OAuthClientManager {
 
     fn create_client(
         mut self,
-        idp: IdentityProvider,
+        provider: IdentityProvider,
         client_id: String,
         client_secret: String,
     ) -> Result<Self> {
-        let config: IdentityProviderConfig = idp.clone().into();
+        let config: IdentityProviderConfig = provider.clone().into();
         let client = BasicClient::new(
             ClientId::new(client_id),
             Some(ClientSecret::new(client_secret)),
@@ -270,11 +315,10 @@ impl OAuthClientManager {
             Some(TokenUrl::new(config.token_url.to_string())?),
         )
         .set_redirect_uri(RedirectUrl::new(format!(
-            "http://localhost:3000{}",
-            config.callback
+            "http://localhost:3000/login/oauth/{provider}/callback"
         ))?);
 
-        self.clients.insert(idp, (client, config));
+        self.clients.insert(provider, (client, config));
         Ok(self)
     }
 }
@@ -391,7 +435,7 @@ impl AuthnBackend for LowboyAuth {
                 })
                 .await?
             }
-            CredentialKind::OAuth(IdentityProvider::GitHub) => {
+            CredentialKind::OAuth(provider) => {
                 let credentials = credentials
                     .oauth
                     .expect("CredentialKind::OAuth oauth field should not be none");
@@ -400,7 +444,7 @@ impl AuthnBackend for LowboyAuth {
                     return Ok(None);
                 };
 
-                let (client, _) = self.oauth.get(&IdentityProvider::GitHub).unwrap();
+                let (client, _) = self.oauth.get(&provider).unwrap();
                 // Process authorization code, expecting a token response back.
                 let token_res = client
                     .exchange_code(AuthorizationCode::new(credentials.code))
@@ -408,91 +452,35 @@ impl AuthnBackend for LowboyAuth {
                     .await
                     .map_err(Self::Error::OAuth2)?;
 
-                // Use access token to request user info.
-                let user_info = reqwest::Client::new()
-                    .get("https://api.github.com/user")
-                    .header(USER_AGENT.as_str(), "lowboy")
-                    .header(
-                        AUTHORIZATION.as_str(),
-                        format!("Bearer {}", token_res.access_token().secret()),
-                    )
-                    .send()
-                    .await
-                    .map_err(Self::Error::Reqwest)?
-                    .json::<GitHubUserInfo>()
-                    .await
-                    .map_err(Self::Error::Reqwest)?;
+                let token = token_res.access_token();
+                let registration_details = provider.fetch_registration_details(token).await?;
+
+                let (username, email) = match registration_details {
+                    RegistrationDetails::GitHub(ref info) => (&info.login, &info.email),
+                    RegistrationDetails::Discord(ref info) => {
+                        let Some(email) = info.email.clone() else {
+                            return Err(Error::DiscordEmail(
+                                "Your discord account must have an email associated with it."
+                                    .to_string(),
+                            ));
+                        };
+                        (&info.username, &email.clone())
+                    }
+                    RegistrationDetails::Local(_) => unreachable!(),
+                };
 
                 // Persist user in our database so we can use `get_user`.
-                let access_token = token_res.access_token().secret();
                 let new_user = NewLowboyUserRecord {
-                    username: &user_info.login,
-                    email: &user_info.email,
+                    username,
+                    email,
                     password: None,
-                    access_token: Some(access_token),
+                    access_token: Some(token.secret()),
                 };
                 let (record, operation) = new_user.create_or_update(&mut conn).await?;
 
                 if operation == Operation::Create {
                     self.context
-                        .on_new_user(&record, RegistrationDetails::GitHub(user_info))
-                        .await
-                        .unwrap();
-                }
-
-                Ok(Some(record))
-            }
-            CredentialKind::OAuth(IdentityProvider::Discord) => {
-                let credentials = credentials
-                    .oauth
-                    .expect("CredentialKind::OAuth oauth field should not be none");
-                // Ensure the CSRF state has not been tampered with.
-                if credentials.old_state.secret() != credentials.new_state.secret() {
-                    return Ok(None);
-                };
-
-                let (client, _) = self.oauth.get(&IdentityProvider::Discord).unwrap();
-                // Process authorization code, expecting a token response back.
-                let token_res = client
-                    .exchange_code(AuthorizationCode::new(credentials.code))
-                    .request_async(async_http_client)
-                    .await
-                    .map_err(Self::Error::OAuth2)?;
-
-                // Use access token to request user info.
-                let user_info = reqwest::Client::new()
-                    .get("https://discord.com/api/users/@me")
-                    .header(USER_AGENT.as_str(), "lowboy")
-                    .header(
-                        AUTHORIZATION.as_str(),
-                        format!("Bearer {}", token_res.access_token().secret()),
-                    )
-                    .send()
-                    .await
-                    .map_err(Self::Error::Reqwest)?
-                    .json::<DiscordUserInfo>()
-                    .await
-                    .map_err(Self::Error::Reqwest)?;
-
-                let Some(email) = user_info.email.clone() else {
-                    return Err(Error::DiscordEmail(
-                        "Your discord account must have an email associated with it.".to_string(),
-                    ));
-                };
-
-                // Persist user in our database so we can use `get_user`.
-                let access_token = token_res.access_token().secret();
-                let new_user = NewLowboyUserRecord {
-                    username: &user_info.username,
-                    email: &email,
-                    password: None,
-                    access_token: Some(access_token),
-                };
-                let (record, operation) = new_user.create_or_update(&mut conn).await?;
-
-                if operation == Operation::Create {
-                    self.context
-                        .on_new_user(&record, RegistrationDetails::Discord(user_info))
+                        .on_new_user(&record, registration_details)
                         .await
                         .unwrap();
                 }

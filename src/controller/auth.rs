@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::{get, post},
@@ -16,8 +16,8 @@ use validator::{Validate, ValidationErrorsKind};
 use crate::{
     app,
     auth::{
-        IdentityProvider, LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails,
-        RegistrationForm,
+        IdentityProvider, IdentityProviderConfig, LoginForm, LowboyLoginView as _,
+        LowboyRegisterView, RegistrationDetails, RegistrationForm,
     },
     context::CloneableAppContext,
     lowboy_view,
@@ -39,13 +39,11 @@ pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
         .route("/register", post(register::<App, AC>))
         .route("/login", get(login_form::<App, AC>))
         .route("/login", post(login::<App, AC>))
-        .route("/login/oauth/github", post(oauth_github::<App, AC>))
-        .route("/login/oauth/github/callback", get(oauth_github_callback))
-        .route("/login/oauth/discord", post(oauth_discord::<App, AC>))
-        .route("/login/oauth/discord/callback", get(oauth_discord_callback))
+        .route("/login/oauth/:provider", post(oauth_init::<App, AC>))
+        .route("/login/oauth/:provider/callback", get(oauth_callback))
         .route(
-            "/login/oauth/discord/authorize",
-            get(oauth_discord_authorize),
+            "/login/oauth/:provider/authenticate",
+            get(oauth_authenticate),
         )
         .route("/logout", get(logout))
 }
@@ -210,7 +208,6 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
             password: input.password().clone(),
         }),
         oauth: None,
-        next: None,
     };
 
     let user = match auth_session.authenticate(creds).await {
@@ -242,15 +239,13 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
     Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response()
 }
 
-pub async fn oauth_github<App: app::App<AC>, AC: CloneableAppContext>(
+pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
     auth_session: AuthSession,
     session: Session,
-    Form(input): Form<Credentials>,
+    Path(provider): Path<IdentityProvider>,
+    Form(input): Form<App::LoginForm>,
 ) -> impl IntoResponse {
-    let (auth_url, csrf_state) = auth_session
-        .backend
-        .authorize_url(&IdentityProvider::GitHub)
-        .unwrap();
+    let (auth_url, csrf_state) = auth_session.backend.authorize_url(&provider).unwrap();
 
     session
         .insert(CSRF_STATE_KEY, csrf_state.secret())
@@ -258,110 +253,46 @@ pub async fn oauth_github<App: app::App<AC>, AC: CloneableAppContext>(
         .expect("Serialization should not fail");
 
     session
-        .insert(NEXT_URL_KEY, input.next)
+        .insert(NEXT_URL_KEY, input.next())
         .await
         .expect("Serialization should not fail");
 
     Redirect::to(auth_url.as_str()).into_response()
 }
 
-pub async fn oauth_github_callback(
-    mut auth_session: AuthSession,
-    messages: Messages,
-    session: Session,
-    Query(AuthzResp {
-        code,
-        state: new_state,
-    }): Query<AuthzResp>,
-) -> impl IntoResponse {
-    let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY).await else {
-        return StatusCode::BAD_REQUEST.into_response();
-    };
-
-    let Ok(Some(next)) = session.get::<Option<String>>(NEXT_URL_KEY).await else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
-
-    let credentials = Credentials {
-        kind: CredentialKind::OAuth(IdentityProvider::GitHub),
-        password: None,
-        oauth: Some(OAuthCredentials {
-            code,
-            old_state,
-            new_state,
-        }),
-        next: next.clone(),
-    };
-
-    let user = match auth_session.authenticate(credentials).await {
-        Ok(Some(user)) => user,
-        Ok(None) => {
-            messages.error("Invalid CSRF state");
-
-            return if let Some(next) = next.to_owned() {
-                Redirect::to(&format!("/login?next={next}"))
-            } else {
-                Redirect::to("/login")
-            }
-            .into_response();
-        }
-        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-    };
-
-    if auth_session.login(&user).await.is_err() {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
-
-    Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response()
-}
-
-pub async fn oauth_discord<App: app::App<AC>, AC: CloneableAppContext>(
-    auth_session: AuthSession,
-    session: Session,
-    Form(input): Form<Credentials>,
-) -> impl IntoResponse {
-    let (auth_url, csrf_state) = auth_session
-        .backend
-        .authorize_url(&IdentityProvider::Discord)
-        .unwrap();
-
-    session
-        .insert(CSRF_STATE_KEY, csrf_state.secret())
-        .await
-        .expect("Serialization should not fail");
-
-    session
-        .insert(NEXT_URL_KEY, input.next)
-        .await
-        .expect("Serialization should not fail");
-
-    Redirect::to(auth_url.as_str()).into_response()
-}
-
-pub async fn oauth_discord_callback(
+pub async fn oauth_callback(
+    Path(provider): Path<IdentityProvider>,
     Query(CallbackResp { code, state }): Query<CallbackResp>,
 ) -> impl IntoResponse {
-    let destination = format!("/login/oauth/discord/authorize?code={code}&state={state}");
-    let html = format!(
-        r#"
-        <script type="text/javascript">
-            window.location = "{destination}";
-        </script>
-        <noscript>
-            <meta http-equiv="refresh" content="0;URL='{destination}'"/>
-        </noscript>
-        "#
-    );
+    let config: IdentityProviderConfig = provider.clone().into();
 
-    lowboy_view!(html, {
-        "title" => "Redirecting...",
-    })
+    let destination = format!("/login/oauth/{provider}/authenticate?code={code}&state={state}");
+    if config.intermediary_redirect {
+        let html = format!(
+            r#"
+            <script type="text/javascript">
+                window.location = "{destination}";
+            </script>
+            <noscript>
+                <meta http-equiv="refresh" content="0;URL='{destination}'"/>
+            </noscript>
+            "#
+        );
+
+        lowboy_view!(html, {
+            "title" => "Redirecting...",
+        })
+        .into_response()
+    } else {
+        Redirect::to(&destination).into_response()
+    }
 }
 
-pub async fn oauth_discord_authorize(
+pub async fn oauth_authenticate(
     mut auth_session: AuthSession,
     messages: Messages,
     session: Session,
+    Path(provider): Path<IdentityProvider>,
     Query(AuthzResp {
         code,
         state: new_state,
@@ -376,14 +307,13 @@ pub async fn oauth_discord_authorize(
     };
 
     let credentials = Credentials {
-        kind: CredentialKind::OAuth(IdentityProvider::Discord),
+        kind: CredentialKind::OAuth(provider),
         password: None,
         oauth: Some(OAuthCredentials {
             code,
             old_state,
             new_state,
         }),
-        next: next.clone(),
     };
 
     let user = match auth_session.authenticate(credentials).await {
@@ -399,7 +329,7 @@ pub async fn oauth_discord_authorize(
             .into_response();
         }
         Err(e) => {
-            warn!("Error authenticating user with Discord: {e}");
+            warn!("Error during oauth authenticate: {e}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };

@@ -16,7 +16,6 @@ pub struct Credentials {
     pub password: Option<PasswordCredentials>,
     #[serde(flatten)]
     pub oauth: Option<OAuthCredentials>,
-    pub next: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
