@@ -58,12 +58,21 @@ impl AppContext for DemoContext {
                     "https://avatar.iran.liara.run/username?username={}+{}",
                     first_name, last_name
                 );
-                (form.name.clone(), avatar)
+                (form.name.clone(), Some(avatar))
             }
-            RegistrationDetails::GitHub(info) => (info.name, info.avatar_url),
+            RegistrationDetails::GitHub(info) => (info.name, Some(info.avatar_url)),
+            RegistrationDetails::Discord(info) => (
+                info.username,
+                info.avatar.map(|hash| {
+                    format!(
+                        "https://cdn.discordapp.com/avatars/{}/{}.png?size=256",
+                        info.id, hash
+                    )
+                }),
+            ),
         };
         User::new_record(record.id, &name)
-            .with_avatar(Some(&avatar))
+            .with_avatar(avatar.as_deref())
             .create(&mut conn)
             .await?;
         Ok(())

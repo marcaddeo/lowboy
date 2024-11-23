@@ -1,7 +1,10 @@
-use crate::view;
-use crate::{app::DemoContext, model::Post};
-use axum::extract::{Form, State};
-use lowboy::AuthSession;
+use crate::{
+    app::{Demo, DemoContext},
+    model::Post,
+    view,
+};
+use axum::extract::Form;
+use lowboy::extractor::{AppUser, DatabaseConnection};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -10,12 +13,13 @@ pub struct PostCreateForm {
 }
 
 pub async fn create(
-    auth_session: AuthSession,
-    State(context): State<DemoContext>,
+    AppUser(author): AppUser<Demo, DemoContext>,
+    DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> String {
-    let mut conn = context.database.get().await.unwrap();
-    let author = auth_session.user.expect("user should be logged in");
+    let Some(author) = author else {
+        return "".to_string(); // @TODO
+    };
 
     let new_post = Post::new_record(author.id, &input.message);
     let record = new_post.create(&mut conn).await.unwrap();
