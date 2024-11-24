@@ -109,6 +109,10 @@ impl App<DemoContext> for Demo {
         "demo"
     }
 
+    fn app_title() -> &'static str {
+        "Demo App"
+    }
+
     fn routes() -> Router<DemoContext> {
         Router::new()
             .route("/", get(controller::home))

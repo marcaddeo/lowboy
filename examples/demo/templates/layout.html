@@ -1,11 +1,17 @@
 {% import "components/alerts.html" as alerts %}
+
+{% let page_title = context.get("title").cloned().unwrap_or_default() %}
+{% let app_title = context.get("app_title").unwrap() %}
+{% let parts = &[&page_title, app_title] %}
+{% let title = parts|join(" | ") %}
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
   {% block head %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{{ context.get("title").cloned().unwrap_or_default() }} | lowboy</title>
+    <title>{{ title }}</title>
     <link href="/static/dist/bundle.css" rel="stylesheet">
     <script src="/static/dist/bundle.js" type="text/javascript" defer></script>
   {% endblock %}

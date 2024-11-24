@@ -70,6 +70,7 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
             "lowboy_version".to_string(),
             env!("VERGEN_GIT_SHA").to_string(),
         );
+        layout_context.insert("app_title".to_string(), App::app_title().to_string());
 
         if let Some(LayoutContext(data)) = response.extensions().get::<LayoutContext>() {
             layout_context.append(&mut data.clone());

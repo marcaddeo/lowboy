@@ -25,6 +25,10 @@ pub trait App<AC: CloneableAppContext>: Send + 'static {
 
     fn name() -> &'static str;
 
+    fn app_title() -> &'static str {
+        Self::name()
+    }
+
     fn layout(context: &AC) -> Self::Layout {
         Self::Layout::default()
     }
