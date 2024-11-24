@@ -17,6 +17,8 @@ use std::collections::BTreeMap;
 
 pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
     State(state): State<AC>,
+    auth_session: Option<AuthSession>,
+    messages: Option<Messages>,
     response: Response,
 ) -> impl IntoResponse {
     if let Some(ErrorWrapper(error)) = response.extensions().get::<ErrorWrapper>() {
@@ -34,7 +36,7 @@ pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
             "title" => "Error",
         })
         .into_response();
-        let html = render_view::<App, AC>(State(state), None, None, view)
+        let html = render_view::<App, AC>(State(state), auth_session, messages, view)
             .await
             .into_response()
             .into_body();

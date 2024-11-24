@@ -127,10 +127,12 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
                 self.context.clone(),
                 view::render_view::<App, AC>,
             ))
+            .layer(middleware::map_response_with_state(
+                self.context.clone(),
+                view::error_page::<App, AC>,
+            ))
             .layer(MessagesManagerLayer)
             .layer(auth_layer)
-            // @note since the error_page middleware is the final middleware, we cant display
-            // messages on the error page from the messages manager.
             .layer(middleware::map_response_with_state(
                 self.context.clone(),
                 view::error_page::<App, AC>,
