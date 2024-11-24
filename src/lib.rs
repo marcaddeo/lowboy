@@ -29,6 +29,7 @@ pub mod auth;
 mod context;
 pub mod controller;
 mod diesel_sqlite_session_store;
+pub mod error;
 pub mod extract;
 pub mod model;
 mod schema;
@@ -127,7 +128,13 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
                 view::render_view::<App, AC>,
             ))
             .layer(MessagesManagerLayer)
-            .layer(auth_layer);
+            .layer(auth_layer)
+            // @note since the error_page middleware is the final middleware, we cant display
+            // messages on the error page from the messages manager.
+            .layer(middleware::map_response_with_state(
+                self.context.clone(),
+                view::error_page::<App, AC>,
+            ));
 
         // Enable livereload for debug builds.
         #[cfg(debug_assertions)]

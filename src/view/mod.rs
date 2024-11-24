@@ -2,26 +2,50 @@ use crate::{
     app,
     auth::AuthSession,
     context::CloneableAppContext,
+    error::ErrorWrapper,
     model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
 };
 use axum::{
     body::Body,
     extract::State,
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
 };
 use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
+pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
+    State(state): State<AC>,
+    response: Response,
+) -> impl IntoResponse {
+    if let Some(ErrorWrapper(_)) = response.extensions().get::<ErrorWrapper>() {
+        let view = View(App::register_view(&state)).into_response();
+        let layout = render_view::<App, AC>(State(state), None, None, view.into_response())
+            .await
+            .into_response()
+            .into_body();
+
+        Response::builder()
+            .status(response.status())
+            .body(layout)
+            .unwrap()
+    } else {
+        response
+    }
+}
+
 pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
-    AuthSession { user, .. }: AuthSession,
-    messages: Messages,
+    auth_session: Option<AuthSession>,
+    messages: Option<Messages>,
     response: Response,
 ) -> impl IntoResponse {
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await.unwrap();
-        let user = if let Some(record) = user {
+        let user = if let Some(AuthSession {
+            user: Some(record), ..
+        }) = auth_session
+        {
             Some(App::User::from_record(&record, &mut conn).await.unwrap())
         } else {
             None
@@ -39,15 +63,17 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
 
         // @perf consider switching to .render() over .to_string()
         // @see https://rinja.readthedocs.io/en/stable/performance.html
-        Html(
-            App::layout(&context)
-                .set_messages(messages.into_iter().collect())
-                .set_content(view.to_string())
-                .set_user(user)
-                .set_context(layout_context)
-                .to_string(),
-        )
-        .into_response()
+        App::layout(&context)
+            .set_messages(
+                messages
+                    .map(|messages| messages.into_iter().collect())
+                    .unwrap_or_default(),
+            )
+            .set_content(view.to_string())
+            .set_user(user)
+            .set_context(layout_context)
+            .to_string()
+            .into_response()
     } else {
         response
     }
