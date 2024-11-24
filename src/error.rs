@@ -1,22 +1,23 @@
 use std::sync::Arc;
 
+use crate::view::LowboyView;
 use axum::{http::StatusCode, response::IntoResponse};
 
 #[derive(Debug, thiserror::Error)]
 pub enum LowboyError {
-    #[error("400 Bad Request")]
+    #[error("Bad Request")]
     BadRequest,
 
-    #[error("401 Unauthorized")]
+    #[error("Unauthorized")]
     Unauthorized,
 
-    #[error("403 Forbidden")]
+    #[error("Forbidden")]
     Forbidden,
 
-    #[error("404 Not Found")]
+    #[error("Not Found")]
     NotFound,
 
-    #[error("500 Internal Server Error")]
+    #[error("Internal Server Error: {0}")]
     Internal(#[from] anyhow::Error),
 }
 
@@ -33,7 +34,7 @@ impl IntoResponse for LowboyError {
             Forbidden => StatusCode::FORBIDDEN,
             NotFound => StatusCode::NOT_FOUND,
             Internal(ref inner) => {
-                tracing::error!("Internal server error: {inner}");
+                tracing::error!("{inner}");
                 StatusCode::INTERNAL_SERVER_ERROR
             }
         };
@@ -45,4 +46,11 @@ impl IntoResponse for LowboyError {
 
         response
     }
+}
+
+pub trait LowboyErrorView: LowboyView + Clone + Default {
+    fn message(&self) -> &String;
+    fn set_message(&mut self, message: &str) -> &mut Self;
+    fn code(&self) -> u16;
+    fn set_code(&mut self, code: u16) -> &mut Self;
 }

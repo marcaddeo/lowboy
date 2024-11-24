@@ -3,6 +3,7 @@ use crate::{
     form::RegisterForm,
     model::User,
     view::{
+        self,
         auth::{Login, Register},
         Layout,
     },
@@ -97,6 +98,7 @@ pub struct Demo;
 
 impl App<DemoContext> for Demo {
     type Layout = Layout<Self::User>;
+    type ErrorView = view::Error;
     type RegisterView = Register<Self::RegistrationForm>;
     type LoginView = Login<Self::LoginForm>;
     type User = User;

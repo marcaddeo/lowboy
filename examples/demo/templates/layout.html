@@ -10,7 +10,7 @@
     <script src="/static/dist/bundle.js" type="text/javascript" defer></script>
   {% endblock %}
   </head>
-  <body class="flex flex-col h-screen bg-surface dark:bg-surfaceDark">
+  <body class="flex flex-col min-h-screen bg-surface dark:bg-surfaceDark">
     {% include "components/header.html" %}
     <main class="mb-auto px-36">
       {% call alerts::alerts(messages) %}

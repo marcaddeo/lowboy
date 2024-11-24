@@ -2,6 +2,7 @@ use crate::{
     auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm},
     context::CloneableAppContext,
     controller,
+    error::{LowboyError, LowboyErrorView},
     model::{LowboyUserRecord, LowboyUserTrait},
     view::LowboyLayout,
 };
@@ -12,6 +13,7 @@ use serde::{Deserialize, Serialize};
 pub trait App<AC: CloneableAppContext>: Send + 'static {
     type User: LowboyUserTrait<LowboyUserRecord>;
     type Layout: LowboyLayout<Self::User>;
+    type ErrorView: LowboyErrorView;
     type RegistrationForm: RegistrationForm
         + Clone
         + Default
@@ -33,6 +35,10 @@ pub trait App<AC: CloneableAppContext>: Send + 'static {
 
     fn login_view(context: &AC) -> Self::LoginView {
         Self::LoginView::default()
+    }
+
+    fn error_view(context: &AC, error: &LowboyError) -> Self::ErrorView {
+        Self::ErrorView::default()
     }
 
     fn routes() -> Router<AC>;

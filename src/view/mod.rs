@@ -2,7 +2,8 @@ use crate::{
     app,
     auth::AuthSession,
     context::CloneableAppContext,
-    error::ErrorWrapper,
+    error::{ErrorWrapper, LowboyError, LowboyErrorView},
+    lowboy_view,
     model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
 };
 use axum::{
@@ -18,16 +19,29 @@ pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
     State(state): State<AC>,
     response: Response,
 ) -> impl IntoResponse {
-    if let Some(ErrorWrapper(_)) = response.extensions().get::<ErrorWrapper>() {
-        let view = View(App::register_view(&state)).into_response();
-        let layout = render_view::<App, AC>(State(state), None, None, view.into_response())
+    if let Some(ErrorWrapper(error)) = response.extensions().get::<ErrorWrapper>() {
+        let message = match **error {
+            // Internal server error details should not be displayed on the error page.
+            LowboyError::Internal(_) => "Internal Server Error".to_string(),
+            _ => error.to_string(),
+        };
+
+        let mut view = App::error_view(&state, error);
+        view.set_code(response.status().into());
+        view.set_message(&message);
+
+        let view = lowboy_view!(view, {
+            "title" => "Error",
+        })
+        .into_response();
+        let html = render_view::<App, AC>(State(state), None, None, view)
             .await
             .into_response()
             .into_body();
 
         Response::builder()
             .status(response.status())
-            .body(layout)
+            .body(html)
             .unwrap()
     } else {
         response
