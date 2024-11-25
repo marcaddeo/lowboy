@@ -17,6 +17,7 @@ use diesel_migrations::{
     embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
 };
 use diesel_sqlite_session_store::DieselSqliteSessionStore;
+use error::LowboyError;
 use flume::{Receiver, Sender};
 use std::{io::LineWriter, time::Duration};
 use tokio::{signal, task::AbortHandle};
@@ -115,6 +116,7 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let router = Router::new()
+            .fallback(|| async { LowboyError::NotFound })
             // App routes.
             .route("/events", get(controller::events::<AC>))
             // Previous routes require authentication.
