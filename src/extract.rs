@@ -43,7 +43,7 @@ where
     S: Send + Sync + AppContext,
     JobSchedulerInstance: FromRef<S>,
 {
-    type Rejection = ();
+    type Rejection = LowboyError;
 
     async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let JobSchedulerInstance(instance) = JobSchedulerInstance::from_ref(state);

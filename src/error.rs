@@ -27,9 +27,19 @@ impl From<diesel::result::Error> for LowboyError {
         Self::Internal(anyhow!("database error: {value}"))
     }
 }
-impl From<deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>> for LowboyError {
-    fn from(value: deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>) -> Self {
+impl From<deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>>
+    for LowboyError
+{
+    fn from(
+        value: deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>,
+    ) -> Self {
         Self::Internal(anyhow!("database pool error: {value}"))
+    }
+}
+
+impl From<tower_sessions::session::Error> for LowboyError {
+    fn from(value: tower_sessions::session::Error) -> Self {
+        Self::Internal(anyhow!("session error: {value}"))
     }
 }
 

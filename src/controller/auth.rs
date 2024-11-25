@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Context};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -20,6 +21,7 @@ use crate::{
         LowboyRegisterView, RegistrationDetails, RegistrationForm,
     },
     context::CloneableAppContext,
+    error::LowboyError,
     lowboy_view,
     model::{
         CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation,
@@ -70,23 +72,24 @@ pub async fn register_form<App: app::App<AC>, AC: CloneableAppContext>(
     AuthSession { user, .. }: AuthSession,
     session: Session,
     Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, LowboyError> {
     if user.is_some() {
-        return Redirect::to(&next.unwrap_or("/".into())).into_response();
+        return Ok(Redirect::to(&next.unwrap_or("/".into())).into_response());
     }
 
     let mut form = session
         .remove(REGISTRATION_FORM_KEY)
-        .await
-        .unwrap()
+        .await?
         .unwrap_or(App::RegistrationForm::empty());
 
     form.set_next(next);
 
-    lowboy_view!(App::register_view(&context).set_form(form).clone(), {
-        "title" => "Register",
-    })
-    .into_response()
+    Ok(
+        lowboy_view!(App::register_view(&context).set_form(form).clone(), {
+            "title" => "Register",
+        })
+        .into_response(),
+    )
 }
 
 pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
@@ -95,9 +98,9 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     session: Session,
     mut messages: Messages,
     Form(input): Form<App::RegistrationForm>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, LowboyError> {
     if user.is_some() {
-        return Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response();
+        return Ok(Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response());
     }
 
     if let Err(validation) = input.validate() {
@@ -109,19 +112,16 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
             }
         }
 
-        session
-            .insert(REGISTRATION_FORM_KEY, input.clone())
-            .await
-            .unwrap();
-        return if let Some(next) = input.next().to_owned() {
+        session.insert(REGISTRATION_FORM_KEY, input.clone()).await?;
+        return Ok(if let Some(next) = input.next().to_owned() {
             Redirect::to(&format!("/register?next={next}"))
         } else {
             Redirect::to("/register")
         }
-        .into_response();
+        .into_response());
     };
 
-    let mut conn = context.database().get().await.unwrap();
+    let mut conn = context.database().get().await?;
 
     let password = password_auth::generate_hash(input.password());
     let new_user =
@@ -136,45 +136,42 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
         Err(_) => messages.error("An unknown error occurred"),
     };
 
-    if res.is_err() {
-        session
-            .insert(REGISTRATION_FORM_KEY, input.clone())
-            .await
-            .unwrap();
+    Ok(if res.is_err() {
+        session.insert(REGISTRATION_FORM_KEY, input.clone()).await?;
         if let Some(next) = input.next().to_owned() {
             Redirect::to(&format!("/register?next={next}"))
         } else {
             Redirect::to("/register")
         }
     } else {
-        if let (user, Operation::Create) = res.unwrap() {
+        if let (user, Operation::Create) = res.expect("checked for error") {
             context
                 .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
-                .await
-                .unwrap();
+                .await?;
         }
 
         Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
     }
-    .into_response()
+    .into_response())
 }
 
 pub async fn login_form<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     session: Session,
     Query(NextUrl { next }): Query<NextUrl>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, LowboyError> {
     let mut form = session
         .remove(LOGIN_FORM_KEY)
-        .await
-        .unwrap()
+        .await?
         .unwrap_or(App::LoginForm::empty());
 
     form.set_next(next);
 
-    lowboy_view!(App::login_view(&context).set_form(form).clone(), {
-        "title" => "Login",
-    })
+    Ok(
+        lowboy_view!(App::login_view(&context).set_form(form).clone(), {
+            "title" => "Login",
+        }),
+    )
 }
 
 pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
@@ -182,8 +179,8 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
     session: Session,
     mut messages: Messages,
     Form(input): Form<App::LoginForm>,
-) -> impl IntoResponse {
-    session.insert(LOGIN_FORM_KEY, input.clone()).await.unwrap();
+) -> Result<impl IntoResponse, LowboyError> {
+    session.insert(LOGIN_FORM_KEY, input.clone()).await?;
 
     if let Err(validation) = input.validate() {
         for (_, info) in validation.into_errors() {
@@ -193,12 +190,12 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
                 }
             }
         }
-        return if let Some(next) = input.next().to_owned() {
+        return Ok(if let Some(next) = input.next().to_owned() {
             Redirect::to(&format!("/login?next={next}"))
         } else {
             Redirect::to("/login")
         }
-        .into_response();
+        .into_response());
     }
 
     let creds = Credentials {
@@ -215,28 +212,29 @@ pub async fn login<App: app::App<AC>, AC: CloneableAppContext>(
         Ok(None) => {
             messages.error("Invalid credentials");
 
-            return if let Some(next) = input.next().to_owned() {
+            return Ok(if let Some(next) = input.next().to_owned() {
                 Redirect::to(&format!("/login?next={next}"))
             } else {
                 Redirect::to("/login")
             }
-            .into_response();
+            .into_response());
         }
         Err(e) => {
-            warn!("Error authenticating user({}): {}", input.username(), e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+            return Err(anyhow!(
+                "Error authenticating user({}): {e}",
+                input.username()
+            ))?;
         }
     };
 
     match auth_session.login(&user).await {
         Ok(_) => (),
         Err(e) => {
-            warn!("Error logging in user({}): {}", user.username, e);
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response(); // @TODO
+            return Err(anyhow!("Error logging in user({}): {e}", input.username()))?;
         }
     }
 
-    Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response()
+    Ok(Redirect::to(&input.next().to_owned().unwrap_or("/".into())).into_response())
 }
 
 pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
@@ -244,8 +242,12 @@ pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
     session: Session,
     Path(provider): Path<IdentityProvider>,
     Form(input): Form<App::LoginForm>,
-) -> impl IntoResponse {
-    let (auth_url, csrf_state) = auth_session.backend.authorize_url(&provider).unwrap();
+) -> Result<impl IntoResponse, LowboyError> {
+    let Some((auth_url, csrf_state)) = auth_session.backend.authorize_url(&provider) else {
+        return Err(anyhow!(
+            "Error getting ouath authorization url for provider: {provider}"
+        ))?;
+    };
 
     session
         .insert(CSRF_STATE_KEY, csrf_state.secret())
@@ -257,7 +259,7 @@ pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
         .await
         .expect("Serialization should not fail");
 
-    Redirect::to(auth_url.as_str()).into_response()
+    Ok(Redirect::to(auth_url.as_str()).into_response())
 }
 
 pub async fn oauth_callback(
@@ -297,14 +299,15 @@ pub async fn oauth_authenticate(
         code,
         state: new_state,
     }): Query<AuthzResp>,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, LowboyError> {
     let Ok(Some(old_state)) = session.get(CSRF_STATE_KEY).await else {
-        return StatusCode::BAD_REQUEST.into_response();
+        return Err(LowboyError::BadRequest);
     };
 
-    let Ok(Some(next)) = session.get::<Option<String>>(NEXT_URL_KEY).await else {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    };
+    let next = session
+        .get::<Option<String>>(NEXT_URL_KEY)
+        .await?
+        .unwrap_or(None);
 
     let credentials = Credentials {
         kind: CredentialKind::OAuth(provider),
@@ -321,32 +324,28 @@ pub async fn oauth_authenticate(
         Ok(None) => {
             messages.error("Invalid CSRF state");
 
-            return if let Some(next) = next.to_owned() {
+            return Ok(if let Some(next) = next.to_owned() {
                 Redirect::to(&format!("/login?next={next}"))
             } else {
                 Redirect::to("/login")
             }
-            .into_response();
+            .into_response());
         }
         Err(e) => {
-            warn!("Error during oauth authenticate: {e}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            return Err(anyhow!("Error during oauth authenticate: {e}"))?;
         }
     };
 
-    if auth_session.login(&user).await.is_err() {
-        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    if let Err(e) = auth_session.login(&user).await {
+        return Err(anyhow!("Error during oauth login: {e}"))?;
     }
 
-    Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response()
+    Ok(Redirect::to(&next.to_owned().unwrap_or("/".into())).into_response())
 }
 
-pub async fn logout(mut session: AuthSession) -> impl IntoResponse {
+pub async fn logout(mut session: AuthSession) -> Result<impl IntoResponse, LowboyError> {
     match session.logout().await {
-        Ok(_) => Redirect::to("/").into_response(),
-        Err(e) => {
-            warn!("Error logging out user: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR.into_response() // @TODO
-        }
+        Ok(_) => Ok(Redirect::to("/").into_response()),
+        Err(e) => Err(anyhow!("Error logging out user: {e}"))?,
     }
 }

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::{http::StatusCode, middleware, response::sse::Event, routing::get, Router};
+use axum::{middleware, response::sse::Event, routing::get, Router};
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -178,13 +178,6 @@ pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
         _ = ctrl_c => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
         _ = terminate => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
     }
-}
-
-pub fn internal_error<E>(err: E) -> (StatusCode, String)
-where
-    E: std::error::Error,
-{
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
 
 #[cfg(debug_assertions)]
