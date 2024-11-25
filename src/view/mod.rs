@@ -9,7 +9,7 @@ use crate::{
 use axum::{
     body::Body,
     extract::State,
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
 };
 use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
@@ -80,17 +80,19 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
 
         // @perf consider switching to .render() over .to_string()
         // @see https://rinja.readthedocs.io/en/stable/performance.html
-        App::layout(&context)
-            .set_messages(
-                messages
-                    .map(|messages| messages.into_iter().collect())
-                    .unwrap_or_default(),
-            )
-            .set_content(view.to_string())
-            .set_user(user)
-            .set_context(layout_context)
-            .to_string()
-            .into_response()
+        Html(
+            App::layout(&context)
+                .set_messages(
+                    messages
+                        .map(|messages| messages.into_iter().collect())
+                        .unwrap_or_default(),
+                )
+                .set_content(view.to_string())
+                .set_user(user)
+                .set_context(layout_context)
+                .to_string(),
+        )
+        .into_response()
     } else {
         response
     }
