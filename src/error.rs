@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::view::LowboyView;
+use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse};
 
 #[derive(Debug, thiserror::Error)]
@@ -19,6 +20,12 @@ pub enum LowboyError {
 
     #[error("Internal Server Error: {0}")]
     Internal(#[from] anyhow::Error),
+}
+
+impl From<diesel::result::Error> for LowboyError {
+    fn from(value: diesel::result::Error) -> Self {
+        Self::Internal(anyhow!("database error: {value}"))
+    }
 }
 
 #[derive(Clone)]
