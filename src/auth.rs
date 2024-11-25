@@ -1,6 +1,5 @@
 #![allow(clippy::transmute_ptr_to_ref)]
 use crate::{
-    error::LowboyError,
     model::{
         CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
     },

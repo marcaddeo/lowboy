@@ -1,7 +1,6 @@
-use anyhow::{anyhow, Context};
+use anyhow::anyhow;
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
     response::{IntoResponse, Redirect},
     routing::{get, post},
     Form, Router,
@@ -11,7 +10,6 @@ use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
 use oauth2::CsrfToken;
 use serde::Deserialize;
 use tower_sessions::Session;
-use tracing::warn;
 use validator::{Validate, ValidationErrorsKind};
 
 use crate::{
