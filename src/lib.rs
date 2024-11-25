@@ -1,5 +1,5 @@
 use anyhow::Result;
-use axum::{http::StatusCode, middleware, response::sse::Event, routing::get, Router};
+use axum::{middleware, response::sse::Event, routing::get, Router};
 use axum_login::{
     login_required,
     tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
@@ -17,6 +17,7 @@ use diesel_migrations::{
     embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
 };
 use diesel_sqlite_session_store::DieselSqliteSessionStore;
+use error::LowboyError;
 use flume::{Receiver, Sender};
 use std::{io::LineWriter, time::Duration};
 use tokio::{signal, task::AbortHandle};
@@ -29,6 +30,7 @@ pub mod auth;
 mod context;
 pub mod controller;
 mod diesel_sqlite_session_store;
+pub mod error;
 pub mod extract;
 pub mod model;
 mod schema;
@@ -114,6 +116,7 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let router = Router::new()
+            .fallback(|| async { LowboyError::NotFound })
             // App routes.
             .route("/events", get(controller::events::<AC>))
             // Previous routes require authentication.
@@ -126,8 +129,16 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
                 self.context.clone(),
                 view::render_view::<App, AC>,
             ))
+            .layer(middleware::map_response_with_state(
+                self.context.clone(),
+                view::error_page::<App, AC>,
+            ))
             .layer(MessagesManagerLayer)
-            .layer(auth_layer);
+            .layer(auth_layer)
+            .layer(middleware::map_response_with_state(
+                self.context.clone(),
+                view::error_page::<App, AC>,
+            ));
 
         // Enable livereload for debug builds.
         #[cfg(debug_assertions)]
@@ -167,13 +178,6 @@ pub async fn shutdown_signal(abort_handle: Option<AbortHandle>) {
         _ = ctrl_c => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
         _ = terminate => { if let Some(abort_handle) = abort_handle { abort_handle.abort() } },
     }
-}
-
-pub fn internal_error<E>(err: E) -> (StatusCode, String)
-where
-    E: std::error::Error,
-{
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
 
 #[cfg(debug_assertions)]

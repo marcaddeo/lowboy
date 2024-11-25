@@ -371,6 +371,9 @@ pub enum Error {
     #[error(transparent)]
     OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
 
+    #[error("{0}")]
+    OAuthClientManager(String),
+
     #[error(transparent)]
     TaskJoin(#[from] tokio::task::JoinError),
 
@@ -382,6 +385,9 @@ pub enum Error {
 
     #[error("{0}")]
     DiscordEmail(String),
+
+    #[error("{0}")]
+    AppError(String),
 }
 
 #[derive(Debug, Deserialize)]
@@ -444,7 +450,12 @@ impl AuthnBackend for LowboyAuth {
                     return Ok(None);
                 };
 
-                let (client, _) = self.oauth.get(&provider).unwrap();
+                let (client, _) =
+                    self.oauth
+                        .get(&provider)
+                        .ok_or(Error::OAuthClientManager(format!(
+                            "failed to get client for provider: {provider}"
+                        )))?;
                 // Process authorization code, expecting a token response back.
                 let token_res = client
                     .exchange_code(AuthorizationCode::new(credentials.code))
@@ -482,7 +493,11 @@ impl AuthnBackend for LowboyAuth {
                     self.context
                         .on_new_user(&record, registration_details)
                         .await
-                        .unwrap();
+                        .map_err(|e| {
+                            Error::AppError(format!(
+                                "there was an error executing on_new_user: {e}"
+                            ))
+                        })?;
                 }
 
                 Ok(Some(record))
