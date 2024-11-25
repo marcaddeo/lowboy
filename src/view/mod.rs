@@ -9,6 +9,7 @@ use crate::{
 use axum::{
     body::Body,
     extract::State,
+    http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 use axum_messages::{Message, Messages};
@@ -44,7 +45,16 @@ pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
         Response::builder()
             .status(response.status())
             .body(html)
-            .unwrap()
+            .unwrap_or_else(|e| {
+                tracing::error!(
+                    "An unknown internal error occurred while rendering an error page: {e}"
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "An unknown internal error occurred.",
+                )
+                    .into_response()
+            })
     } else {
         response
     }
@@ -55,14 +65,14 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     auth_session: Option<AuthSession>,
     messages: Option<Messages>,
     response: Response,
-) -> impl IntoResponse {
+) -> Result<impl IntoResponse, LowboyError> {
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
-        let mut conn = context.database().get().await.unwrap();
+        let mut conn = context.database().get().await?;
         let user = if let Some(AuthSession {
             user: Some(record), ..
         }) = auth_session
         {
-            Some(App::User::from_record(&record, &mut conn).await.unwrap())
+            Some(App::User::from_record(&record, &mut conn).await?)
         } else {
             None
         };
@@ -80,7 +90,7 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
 
         // @perf consider switching to .render() over .to_string()
         // @see https://rinja.readthedocs.io/en/stable/performance.html
-        Html(
+        Ok(Html(
             App::layout(&context)
                 .set_messages(
                     messages
@@ -92,9 +102,9 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
                 .set_context(layout_context)
                 .to_string(),
         )
-        .into_response()
+        .into_response())
     } else {
-        response
+        Ok(response)
     }
 }
 
