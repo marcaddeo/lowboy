@@ -27,6 +27,11 @@ impl From<diesel::result::Error> for LowboyError {
         Self::Internal(anyhow!("database error: {value}"))
     }
 }
+impl From<deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>> for LowboyError {
+    fn from(value: deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>) -> Self {
+        Self::Internal(anyhow!("database pool error: {value}"))
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct ErrorWrapper(pub Arc<LowboyError>);
