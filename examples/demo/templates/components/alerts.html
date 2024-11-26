@@ -4,6 +4,7 @@
 {% import "components/alert-error.html" as error %}
 
 {% macro alerts(messages) %}
+  <div id="messages">
   {% for message in messages %}
     <div class="my-4">
       {% match message.level %}
@@ -20,4 +21,5 @@
       {% endmatch %}
     </div>
   {% endfor %}
+  </div>
 {% endmacro %}
