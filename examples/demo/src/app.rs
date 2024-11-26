@@ -8,6 +8,7 @@ use crate::{
         Layout,
     },
 };
+use anyhow::Context as _;
 use axum::{
     routing::{get, post},
     Router,
@@ -53,7 +54,9 @@ impl AppContext for DemoContext {
         let mut conn = self.database.get().await?;
         let (name, avatar) = match details {
             RegistrationDetails::Local(form) => {
-                let form = form.downcast_ref::<RegisterForm>().unwrap();
+                let form = form
+                    .downcast_ref::<RegisterForm>()
+                    .context("Couldn't downcast register form for new user creation")?;
                 let (first_name, last_name) = form.name.split_once(' ').unwrap_or((&form.name, ""));
                 let avatar = format!(
                     "https://avatar.iran.liara.run/username?username={}+{}",
