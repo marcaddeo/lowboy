@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
 use axum::response::sse::Event;
 use diesel::sqlite::SqliteConnection;
@@ -12,12 +13,6 @@ use tokio_cron_scheduler::JobScheduler;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ContextError {
-    #[error(transparent)]
-    Xdg(#[from] xdg::BaseDirectoriesError),
-
-    #[error(transparent)]
-    Io(#[from] std::io::Error),
-
     #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
@@ -131,10 +126,7 @@ impl AppContext for () {
     }
 }
 
-pub async fn create_context<AC: AppContext>() -> Result<AC, ContextError> {
-    let database =
-        xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
-
+pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC, ContextError> {
     diesel::connection::set_default_instrumentation(|| {
         Some(Box::new(diesel_tracing::TracingInstrumentation::new(true)))
     })?;
@@ -159,11 +151,13 @@ pub async fn create_context<AC: AppContext>() -> Result<AC, ContextError> {
 
     let manager =
         AsyncDieselConnectionManager::<SyncConnectionWrapper<SqliteConnection>>::new_with_config(
-            database.to_str().expect("database path should be valid"),
+            config.database_url.clone(),
             manager_config,
         );
 
-    let database = Pool::builder(manager).max_size(16).build()?;
+    let database = Pool::builder(manager)
+        .max_size(config.database_pool_size)
+        .build()?;
 
     let events = flume::bounded::<Event>(32);
 

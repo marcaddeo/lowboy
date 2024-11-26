@@ -7,6 +7,7 @@ use axum_login::{
 };
 use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
+use config::Config;
 use context::{create_context, CloneableAppContext};
 use diesel::{
     sqlite::{Sqlite, SqliteConnection},
@@ -23,10 +24,11 @@ use std::{io::LineWriter, time::Duration};
 use tokio::{signal, task::AbortHandle};
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
-use tracing::{info, warn};
+use tracing::info;
 
 mod app;
 pub mod auth;
+mod config;
 mod context;
 pub mod controller;
 mod diesel_sqlite_session_store;
@@ -49,6 +51,7 @@ pub type Events = (Sender<Event>, Receiver<Event>);
 
 #[derive(Clone)]
 pub struct Lowboy<AC: AppContext> {
+    config: Config,
     context: AC,
 }
 
@@ -72,14 +75,15 @@ impl std::io::Write for MigrationWriter {
 
 impl<AC: CloneableAppContext> Lowboy<AC> {
     pub async fn boot() -> Self {
-        let context = create_context::<AC>().await.unwrap();
+        let config = Config::load(None).unwrap();
+        let context = create_context::<AC>(&config).await.unwrap();
 
         let mut conn = context.database().get().await.unwrap();
         conn.spawn_blocking(|conn| Self::run_migrations(conn))
             .await
             .unwrap();
 
-        Self { context }
+        Self { config, context }
     }
 
     fn run_migrations(conn: &mut impl MigrationHarness<Sqlite>) -> QueryResult<()> {
@@ -98,21 +102,16 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
                 .clone()
                 .continuously_delete_expired(Duration::from_secs(60)),
         );
-        let session_key = std::env::var("SESSION_KEY").ok();
-        let session_key = if let Some(session_key) = session_key {
-            let session_key = BASE64_STANDARD.decode(session_key)?;
-            Key::from(session_key.as_slice())
-        } else {
-            warn!("Could not get SESSION_KEY from environment. Falling back to generated key. This will invalidate any sessions when the server is stopped.");
-            Key::generate()
-        };
+        let session_key = BASE64_STANDARD.decode(self.config.session_key)?;
+        let session_key = Key::from(session_key.as_slice());
 
         let session_layer = SessionManagerLayer::new(session_store)
             .with_secure(false) // @TODO
             .with_expiry(Expiry::OnInactivity(cookie::time::Duration::days(1)))
             .with_signed(session_key);
 
-        let lowboy_auth = LowboyAuth::new(Box::new(self.context.clone()))?;
+        let lowboy_auth =
+            LowboyAuth::new(Box::new(self.context.clone()), self.config.oauth_providers)?;
         let auth_layer = AuthManagerLayerBuilder::new(lowboy_auth, session_layer).build();
 
         let router = Router::new()

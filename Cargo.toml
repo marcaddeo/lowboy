@@ -17,6 +17,7 @@ axum-login = "0.16.0"
 axum-messages = "0.7.0"
 base64 = "0.22.1"
 chrono = "0.4.38"
+confique = { version = "0.3.0", features = ["yaml"] }
 deadpool = "0.12.1"
 deadpool-diesel = { version = "0.6.1", features = [
     "sqlite",

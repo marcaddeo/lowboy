@@ -15,8 +15,8 @@ use validator::{Validate, ValidationErrorsKind};
 use crate::{
     app,
     auth::{
-        IdentityProvider, IdentityProviderConfig, LoginForm, LowboyLoginView as _,
-        LowboyRegisterView, RegistrationDetails, RegistrationForm,
+        IdentityProvider, LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails,
+        RegistrationForm,
     },
     context::CloneableAppContext,
     error::LowboyError,
@@ -55,6 +55,7 @@ pub struct NextUrl {
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct CallbackResp {
+    intermediary_redirect: bool,
     code: String,
     state: String,
 }
@@ -262,12 +263,14 @@ pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
 
 pub async fn oauth_callback(
     Path(provider): Path<IdentityProvider>,
-    Query(CallbackResp { code, state }): Query<CallbackResp>,
+    Query(CallbackResp {
+        intermediary_redirect,
+        code,
+        state,
+    }): Query<CallbackResp>,
 ) -> impl IntoResponse {
-    let config: IdentityProviderConfig = provider.clone().into();
-
     let destination = format!("/login/oauth/{provider}/authenticate?code={code}&state={state}");
-    if config.intermediary_redirect {
+    if intermediary_redirect {
         let html = format!(
             r#"
             <script type="text/javascript">

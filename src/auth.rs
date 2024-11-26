@@ -158,50 +158,42 @@ pub enum RegistrationDetails {
     Local(Box<dyn RegistrationForm>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct IdentityProviderConfig {
+    pub kind: IdentityProvider,
+    pub client_id: String,
+    pub client_secret: String,
     pub auth_url: String,
     pub token_url: String,
     pub intermediary_redirect: bool,
+    #[serde(default)]
     pub scopes: Vec<Scope>,
-    pub extra_params: Vec<(String, String)>,
+    #[serde(default)]
+    pub extra_params: HashMap<String, String>,
 }
 
 impl IdentityProviderConfig {
-    pub fn new(auth_url: impl Into<String>, token_url: impl Into<String>) -> Self {
+    pub fn new(
+        kind: IdentityProvider,
+        client_id: impl Into<String>,
+        client_secret: impl Into<String>,
+        auth_url: impl Into<String>,
+        token_url: impl Into<String>,
+    ) -> Self {
         Self {
+            kind,
+            client_id: client_id.into(),
+            client_secret: client_secret.into(),
             auth_url: auth_url.into(),
             token_url: token_url.into(),
             intermediary_redirect: false,
             scopes: vec![],
-            extra_params: vec![],
-        }
-    }
-
-    pub fn with_scopes(self, scopes: Vec<Scope>) -> Self {
-        Self { scopes, ..self }
-    }
-
-    pub fn with_extra_params(self, extra_params: Vec<(&str, &str)>) -> Self {
-        Self {
-            extra_params: extra_params
-                .into_iter()
-                .map(|(name, value)| (name.to_string(), value.to_string()))
-                .collect(),
-            ..self
-        }
-    }
-
-    pub fn with_intermediary_redirect(self, intermediary_redirect: bool) -> Self {
-        Self {
-            intermediary_redirect,
-            ..self
+            extra_params: HashMap::new(),
         }
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq, strum::Display)]
-#[serde(into = "String")]
+#[derive(Clone, Debug, Deserialize, Serialize, Hash, Eq, PartialEq, strum::Display)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum IdentityProvider {
@@ -250,72 +242,28 @@ impl IdentityProvider {
     }
 }
 
-impl From<IdentityProvider> for IdentityProviderConfig {
-    fn from(value: IdentityProvider) -> Self {
-        use IdentityProvider::*;
-
-        match value {
-            GitHub => IdentityProviderConfig::new(
-                "https://github.com/login/oauth/authorize",
-                "https://github.com/login/oauth/access_token",
-            ),
-
-            Discord => IdentityProviderConfig::new(
-                "https://discord.com/oauth2/authorize",
-                "https://discord.com/api/oauth2/token",
-            )
-            .with_intermediary_redirect(true)
-            .with_scopes(vec![
-                Scope::new("identify".to_string()),
-                Scope::new("email".to_string()),
-            ])
-            .with_extra_params(vec![("prompt", "none")]),
-        }
-    }
-}
-
 #[derive(Clone, Default)]
 pub struct OAuthClientManager {
     clients: HashMap<IdentityProvider, (BasicClient, IdentityProviderConfig)>,
 }
 
 impl OAuthClientManager {
-    pub fn with_client(
-        self,
-        idp: IdentityProvider,
-        client_id: String,
-        client_secret: String,
-    ) -> Result<Self> {
-        self.create_client(idp, client_id, client_secret)
-    }
-
-    pub fn with_github(self, client_id: String, client_secret: String) -> Result<Self> {
-        self.create_client(IdentityProvider::GitHub, client_id, client_secret)
-    }
-
-    pub fn with_discord(self, client_id: String, client_secret: String) -> Result<Self> {
-        self.create_client(IdentityProvider::Discord, client_id, client_secret)
-    }
-
     pub fn get(&self, idp: &IdentityProvider) -> Option<&(BasicClient, IdentityProviderConfig)> {
         self.clients.get(idp)
     }
 
-    fn create_client(
-        mut self,
-        provider: IdentityProvider,
-        client_id: String,
-        client_secret: String,
-    ) -> Result<Self> {
-        let config: IdentityProviderConfig = provider.clone().into();
+    pub fn insert(&mut self, config: IdentityProviderConfig) -> Result<&mut Self> {
+        let provider = config.kind.clone();
+        let intermediary_redirect = config.intermediary_redirect;
         let client = BasicClient::new(
-            ClientId::new(client_id),
-            Some(ClientSecret::new(client_secret)),
+            ClientId::new(config.client_id.clone()),
+            Some(ClientSecret::new(config.client_secret.clone())),
             AuthUrl::new(config.auth_url.to_string())?,
             Some(TokenUrl::new(config.token_url.to_string())?),
         )
+        // @TODO
         .set_redirect_uri(RedirectUrl::new(format!(
-            "http://localhost:3000/login/oauth/{provider}/callback"
+            "http://localhost:3000/login/oauth/{provider}/callback?intermediary_redirect={intermediary_redirect}"
         ))?);
 
         self.clients.insert(provider, (client, config));
@@ -330,20 +278,15 @@ pub struct LowboyAuth {
 }
 
 impl LowboyAuth {
-    pub fn new(context: Box<dyn AppContext>) -> Result<Self> {
-        let oauth = OAuthClientManager::default()
-            .with_github(
-                std::env::var("OAUTH_GITHUB_CLIENT_ID")
-                    .expect("OAUTH_GITHUB_CLIENT_ID should be set"),
-                std::env::var("OAUTH_GITHUB_CLIENT_SECRET")
-                    .expect("OAUTH_GITHUB_CLIENT_SECRET should be set"),
-            )?
-            .with_discord(
-                std::env::var("OAUTH_DISCORD_CLIENT_ID")
-                    .expect("OAUTH_DISCORD_CLIENT_ID should be set"),
-                std::env::var("OAUTH_DISCORD_CLIENT_SECRET")
-                    .expect("OAUTH_DISCORD_CLIENT_SECRET should be set"),
-            )?;
+    pub fn new(
+        context: Box<dyn AppContext>,
+        providers: Vec<IdentityProviderConfig>,
+    ) -> Result<Self> {
+        let mut oauth = OAuthClientManager::default();
+
+        for provider in providers.into_iter() {
+            oauth.insert(provider)?;
+        }
 
         Ok(Self { oauth, context })
     }
