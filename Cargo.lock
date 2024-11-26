@@ -217,16 +217,19 @@ dependencies = [
 [[package]]
 name = "axum-messages"
 version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40e85c86a8bd84f54833bca296a0204bd865958ade62bacadeae92dda34cfb8a"
 dependencies = [
  "async-trait",
+ "axum",
  "axum-core",
  "http 1.1.0",
+ "http-body-util",
+ "hyper 1.5.0",
  "parking_lot",
  "serde",
  "serde_json",
+ "tokio",
  "tower 0.4.13",
+ "tower-sessions",
  "tower-sessions-core",
  "tracing",
 ]

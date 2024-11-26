@@ -12,14 +12,14 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
-use axum_messages::{Message, Messages};
+use axum_messages::{LazyMessages, Message, Messages};
 use dyn_clone::DynClone;
 use std::collections::BTreeMap;
 
 pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
     State(state): State<AC>,
     auth_session: Option<AuthSession>,
-    messages: Option<Messages>,
+    messages: LazyMessages,
     response: Response,
 ) -> impl IntoResponse {
     if let Some(ErrorWrapper(error)) = response.extensions().get::<ErrorWrapper>() {
@@ -63,7 +63,7 @@ pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
 pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     State(context): State<AC>,
     auth_session: Option<AuthSession>,
-    messages: Option<Messages>,
+    LazyMessages(messages): LazyMessages,
     response: Response,
 ) -> Result<impl IntoResponse, LowboyError> {
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
@@ -87,6 +87,8 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
         if let Some(LayoutContext(data)) = response.extensions().get::<LayoutContext>() {
             layout_context.append(&mut data.clone());
         }
+
+        let messages = messages.map(Messages::load);
 
         // @perf consider switching to .render() over .to_string()
         // @see https://rinja.readthedocs.io/en/stable/performance.html
