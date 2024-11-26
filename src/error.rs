@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::view::LowboyView;
+use crate::{context::ContextError, view::LowboyView};
 use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse};
 
@@ -27,6 +27,7 @@ impl From<diesel::result::Error> for LowboyError {
         Self::Internal(anyhow!("database error: {value}"))
     }
 }
+
 impl From<deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>>
     for LowboyError
 {
@@ -40,6 +41,12 @@ impl From<deadpool::managed::PoolError<diesel_async::pooled_connection::PoolErro
 impl From<tower_sessions::session::Error> for LowboyError {
     fn from(value: tower_sessions::session::Error) -> Self {
         Self::Internal(anyhow!("session error: {value}"))
+    }
+}
+
+impl From<ContextError> for LowboyError {
+    fn from(value: ContextError) -> Self {
+        Self::Internal(anyhow!("context error: {value}"))
     }
 }
 

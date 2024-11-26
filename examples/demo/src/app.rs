@@ -18,7 +18,7 @@ use diesel_async::pooled_connection::deadpool::Pool;
 use lowboy::{
     auth::{LowboyLoginForm, RegistrationDetails},
     model::LowboyUserRecord,
-    App, AppContext, Connection, Context, Events, LowboyAuth,
+    App, AppContext, Connection, Context, ContextError, Events, LowboyAuth,
 };
 use tokio_cron_scheduler::JobScheduler;
 
@@ -37,7 +37,7 @@ impl AppContext for DemoContext {
         database: Pool<Connection>,
         events: Events,
         scheduler: JobScheduler,
-    ) -> anyhow::Result<Self> {
+    ) -> Result<Self, ContextError> {
         Ok(Self {
             database,
             events,
@@ -50,7 +50,7 @@ impl AppContext for DemoContext {
         &self,
         record: &LowboyUserRecord,
         details: RegistrationDetails,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), ContextError> {
         let mut conn = self.database.get().await?;
         let (name, avatar) = match details {
             RegistrationDetails::Local(form) => {

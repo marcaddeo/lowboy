@@ -1,4 +1,4 @@
-use anyhow::Result;
+use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
 use axum::response::sse::Event;
 use diesel::sqlite::SqliteConnection;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
@@ -10,7 +10,31 @@ use flume::{Receiver, Sender};
 use futures::FutureExt;
 use tokio_cron_scheduler::JobScheduler;
 
-use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
+#[derive(Debug, thiserror::Error)]
+pub enum ContextError {
+    #[error(transparent)]
+    Xdg(#[from] xdg::BaseDirectoriesError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    Diesel(#[from] diesel::result::Error),
+
+    #[error(transparent)]
+    PoolBuild(#[from] deadpool::managed::BuildError),
+
+    #[error(transparent)]
+    PoolConnection(
+        #[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>,
+    ),
+
+    #[error(transparent)]
+    JobScheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
+
+    #[error(transparent)]
+    App(#[from] anyhow::Error),
+}
 
 pub trait Context: Send + Sync + 'static {
     fn database(&self) -> &Pool<Connection>;
@@ -21,7 +45,11 @@ pub trait Context: Send + Sync + 'static {
 #[allow(unused_variables)]
 #[async_trait::async_trait]
 pub trait AppContext: Context + DynClone {
-    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>
+    fn create(
+        database: Pool<Connection>,
+        events: Events,
+        scheduler: JobScheduler,
+    ) -> Result<Self, ContextError>
     where
         Self: Sized;
 
@@ -29,7 +57,7 @@ pub trait AppContext: Context + DynClone {
         &self,
         record: &LowboyUserRecord,
         details: RegistrationDetails,
-    ) -> Result<()> {
+    ) -> Result<(), ContextError> {
         Ok(())
     }
 }
@@ -61,7 +89,11 @@ impl Context for LowboyContext {
 }
 
 impl AppContext for LowboyContext {
-    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self> {
+    fn create(
+        database: Pool<Connection>,
+        events: Events,
+        scheduler: JobScheduler,
+    ) -> Result<Self, ContextError> {
         Ok(Self {
             database,
             events,
@@ -91,7 +123,7 @@ impl AppContext for () {
         _database: Pool<Connection>,
         _events: Events,
         _scheduler: JobScheduler,
-    ) -> Result<Self>
+    ) -> Result<Self, ContextError>
     where
         Self: Sized,
     {
@@ -99,7 +131,7 @@ impl AppContext for () {
     }
 }
 
-pub async fn create_context<AC: AppContext>() -> Result<AC> {
+pub async fn create_context<AC: AppContext>() -> Result<AC, ContextError> {
     let database =
         xdg::BaseDirectories::with_prefix("lowboy/db")?.place_data_file("database.sqlite3")?;
 
@@ -131,14 +163,12 @@ pub async fn create_context<AC: AppContext>() -> Result<AC> {
             manager_config,
         );
 
-    let database = Pool::builder(manager).max_size(16).build().unwrap();
+    let database = Pool::builder(manager).max_size(16).build()?;
 
     let events = flume::bounded::<Event>(32);
 
-    let scheduler = JobScheduler::new()
-        .await
-        .expect("job scheduler should be created");
-    scheduler.start().await.expect("scheduler should start");
+    let scheduler = JobScheduler::new().await?;
+    scheduler.start().await?;
 
     AC::create(database, events, scheduler)
 }

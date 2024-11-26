@@ -39,7 +39,7 @@ pub mod view;
 pub use {
     app::App,
     auth::{AuthSession, LowboyAuth},
-    context::{AppContext, Context, LowboyContext},
+    context::{AppContext, Context, ContextError, LowboyContext},
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
