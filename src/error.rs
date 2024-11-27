@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::{context::ContextError, view::LowboyView};
+use crate::{context, view::LowboyView};
 use anyhow::anyhow;
 use axum::{http::StatusCode, response::IntoResponse};
 
@@ -44,8 +44,8 @@ impl From<tower_sessions::session::Error> for LowboyError {
     }
 }
 
-impl From<ContextError> for LowboyError {
-    fn from(value: ContextError) -> Self {
+impl From<context::Error> for LowboyError {
+    fn from(value: context::Error) -> Self {
         Self::Internal(anyhow!("context error: {value}"))
     }
 }

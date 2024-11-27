@@ -2,7 +2,6 @@ use crate::{
     app, context::CloneableAppContext, error::LowboyError, model::FromRecord as _, AppContext,
     AuthSession, Connection,
 };
-use anyhow::Result;
 use axum::{
     extract::{FromRef, FromRequestParts},
     http::request::Parts,

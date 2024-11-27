@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
 use axum::response::sse::Event;
 use diesel::sqlite::SqliteConnection;
+use diesel::ConnectionError;
 use diesel_async::pooled_connection::AsyncDieselConnectionManager;
 use diesel_async::pooled_connection::{deadpool::Pool, ManagerConfig};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
@@ -11,10 +12,15 @@ use flume::{Receiver, Sender};
 use futures::FutureExt;
 use tokio_cron_scheduler::JobScheduler;
 
+type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Debug, thiserror::Error)]
-pub enum ContextError {
+pub enum Error {
     #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
+
+    #[error(transparent)]
+    DieselConnection(#[from] diesel::ConnectionError),
 
     #[error(transparent)]
     PoolBuild(#[from] deadpool::managed::BuildError),
@@ -31,6 +37,16 @@ pub enum ContextError {
     App(#[from] anyhow::Error),
 }
 
+impl From<Error> for ConnectionError {
+    fn from(value: Error) -> Self {
+        match value {
+            Error::DieselConnection(e) => e,
+            Error::Diesel(e) => Self::CouldntSetupConfiguration(e),
+            _ => unreachable!(),
+        }
+    }
+}
+
 pub trait Context: Send + Sync + 'static {
     fn database(&self) -> &Pool<Connection>;
     fn events(&self) -> &Events;
@@ -40,11 +56,7 @@ pub trait Context: Send + Sync + 'static {
 #[allow(unused_variables)]
 #[async_trait::async_trait]
 pub trait AppContext: Context + DynClone {
-    fn create(
-        database: Pool<Connection>,
-        events: Events,
-        scheduler: JobScheduler,
-    ) -> Result<Self, ContextError>
+    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>
     where
         Self: Sized;
 
@@ -52,7 +64,7 @@ pub trait AppContext: Context + DynClone {
         &self,
         record: &LowboyUserRecord,
         details: RegistrationDetails,
-    ) -> Result<(), ContextError> {
+    ) -> Result<()> {
         Ok(())
     }
 }
@@ -84,11 +96,7 @@ impl Context for LowboyContext {
 }
 
 impl AppContext for LowboyContext {
-    fn create(
-        database: Pool<Connection>,
-        events: Events,
-        scheduler: JobScheduler,
-    ) -> Result<Self, ContextError> {
+    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self> {
         Ok(Self {
             database,
             events,
@@ -118,7 +126,7 @@ impl AppContext for () {
         _database: Pool<Connection>,
         _events: Events,
         _scheduler: JobScheduler,
-    ) -> Result<Self, ContextError>
+    ) -> Result<Self>
     where
         Self: Sized,
     {
@@ -126,7 +134,7 @@ impl AppContext for () {
     }
 }
 
-pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC, ContextError> {
+pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC> {
     diesel::connection::set_default_instrumentation(|| {
         Some(Box::new(diesel_tracing::TracingInstrumentation::new(true)))
     })?;
@@ -134,7 +142,9 @@ pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC, Conte
     let mut manager_config = ManagerConfig::default();
     manager_config.custom_setup = Box::new(|url| {
         async {
-            let mut conn = SyncConnectionWrapper::<SqliteConnection>::establish(url).await?;
+            let mut conn = SyncConnectionWrapper::<SqliteConnection>::establish(url)
+                .await
+                .map_err(Error::DieselConnection)?;
 
             let query = "
             PRAGMA journal_mode = WAL;
@@ -142,7 +152,7 @@ pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC, Conte
             PRAGMA foreign_keys = ON;
             PRAGMA busy_timeout = 30000;
             ";
-            conn.batch_execute(query).await.unwrap(); // @TODO
+            conn.batch_execute(query).await.map_err(Error::Diesel)?;
 
             Ok(conn)
         }

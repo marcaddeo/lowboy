@@ -10,7 +10,7 @@ mod schema;
 mod view;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
@@ -24,7 +24,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let lowboy = Lowboy::boot().await;
+    Lowboy::boot().await?.serve::<Demo>().await?;
 
-    let _ = lowboy.serve::<Demo>().await;
+    Ok(())
 }

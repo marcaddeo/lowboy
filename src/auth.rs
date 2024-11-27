@@ -6,7 +6,6 @@ use crate::{
     view::LowboyView,
     AppContext,
 };
-use anyhow::Result;
 use async_trait::async_trait;
 use axum_login::AuthnBackend;
 use derive_masked::DebugMasked;
@@ -27,6 +26,40 @@ use std::collections::HashMap;
 use validator::Validate;
 
 pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
+type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Reqwest(reqwest::Error),
+
+    #[error(transparent)]
+    OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
+
+    #[error(transparent)]
+    OAuth2Url(#[from] oauth2::url::ParseError),
+
+    #[error("{0}")]
+    OAuthClientManager(String),
+
+    #[error(transparent)]
+    TaskJoin(#[from] tokio::task::JoinError),
+
+    #[error(transparent)]
+    Deadpool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
+
+    #[error(transparent)]
+    Diesel(#[from] diesel::result::Error),
+
+    #[error("{0}")]
+    DiscordEmail(String),
+
+    #[error("{0}")]
+    AppError(String),
+
+    #[error("missing {0} credential")]
+    MissingCredential(&'static str),
+}
 
 #[typetag::serde(tag = "RegistrationForm")]
 pub trait RegistrationForm: Validate + Send + Sync + DynClone + mopa::Any {
@@ -205,7 +238,7 @@ impl IdentityProvider {
     pub async fn fetch_registration_details(
         &self,
         token: &AccessToken,
-    ) -> Result<RegistrationDetails, Error> {
+    ) -> Result<RegistrationDetails> {
         use IdentityProvider::*;
 
         match *self {
@@ -306,33 +339,6 @@ impl LowboyAuth {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    Reqwest(reqwest::Error),
-
-    #[error(transparent)]
-    OAuth2(BasicRequestTokenError<AsyncHttpClientError>),
-
-    #[error("{0}")]
-    OAuthClientManager(String),
-
-    #[error(transparent)]
-    TaskJoin(#[from] tokio::task::JoinError),
-
-    #[error(transparent)]
-    Deadpool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
-
-    #[error(transparent)]
-    Diesel(#[from] diesel::result::Error),
-
-    #[error("{0}")]
-    DiscordEmail(String),
-
-    #[error("{0}")]
-    AppError(String),
-}
-
 #[derive(Debug, Deserialize)]
 pub struct GitHubUserInfo {
     pub login: String,
@@ -359,14 +365,14 @@ impl AuthnBackend for LowboyAuth {
     async fn authenticate(
         &self,
         credentials: Self::Credentials,
-    ) -> Result<Option<Self::User>, Self::Error> {
+    ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
 
         match credentials.kind {
             CredentialKind::Password => {
                 let credentials = credentials
                     .password
-                    .expect("CredentialKind::Password password field should not be none");
+                    .ok_or(Error::MissingCredential("password"))?;
                 let Some(user) =
                     LowboyUser::find_by_username_having_password(&credentials.username, &mut conn)
                         .await?
@@ -377,7 +383,7 @@ impl AuthnBackend for LowboyAuth {
                 tokio::task::spawn_blocking(|| {
                     Ok(verify_password(
                         credentials.password,
-                        user.password.as_ref().expect("checked is_none"),
+                        user.password.as_ref().expect("checked in query"),
                     )
                     .is_ok()
                     .then_some(user.into()))
@@ -385,9 +391,7 @@ impl AuthnBackend for LowboyAuth {
                 .await?
             }
             CredentialKind::OAuth(provider) => {
-                let credentials = credentials
-                    .oauth
-                    .expect("CredentialKind::OAuth oauth field should not be none");
+                let credentials = credentials.oauth.ok_or(Error::MissingCredential("oauth"))?;
                 // Ensure the CSRF state has not been tampered with.
                 if credentials.old_state.secret() != credentials.new_state.secret() {
                     return Ok(None);
@@ -451,7 +455,7 @@ impl AuthnBackend for LowboyAuth {
     async fn get_user(
         &self,
         user_id: &axum_login::UserId<Self>,
-    ) -> Result<Option<Self::User>, Self::Error> {
+    ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
         Ok(Some(LowboyUser::find(*user_id, &mut conn).await?.into()))
     }

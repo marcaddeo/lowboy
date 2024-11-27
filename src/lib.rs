@@ -1,4 +1,3 @@
-use anyhow::Result;
 use axum::{middleware, response::sse::Event, routing::get, Router};
 use axum_login::{
     login_required,
@@ -9,10 +8,7 @@ use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
 use config::Config;
 use context::{create_context, CloneableAppContext};
-use diesel::{
-    sqlite::{Sqlite, SqliteConnection},
-    QueryResult,
-};
+use diesel::sqlite::{Sqlite, SqliteConnection};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_migrations::{
     embed_migrations, EmbeddedMigrations, HarnessWithOutput, MigrationHarness,
@@ -29,7 +25,7 @@ use tracing::info;
 mod app;
 pub mod auth;
 mod config;
-mod context;
+pub mod context;
 pub mod controller;
 mod diesel_sqlite_session_store;
 pub mod error;
@@ -41,13 +37,50 @@ pub mod view;
 pub use {
     app::App,
     auth::{AuthSession, LowboyAuth},
-    context::{AppContext, Context, ContextError, LowboyContext},
+    context::{AppContext, Context, LowboyContext},
 };
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 pub type Connection = SyncConnectionWrapper<SqliteConnection>;
 pub type Events = (Sender<Event>, Receiver<Event>);
+type Result<T> = std::result::Result<T, Error>;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error(transparent)]
+    Config(#[from] crate::config::Error),
+
+    #[error(transparent)]
+    Context(#[from] crate::context::Error),
+
+    #[error(transparent)]
+    Auth(#[from] crate::auth::Error),
+
+    #[error(transparent)]
+    Pool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
+
+    #[error(transparent)]
+    Diesel(#[from] diesel::result::Error),
+
+    #[error(transparent)]
+    SessionStore(#[from] tower_sessions::session_store::Error),
+
+    #[error(transparent)]
+    Base64Decode(#[from] base64::DecodeError),
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    TokioJoin(#[from] tokio::task::JoinError),
+
+    #[error(transparent)]
+    Notify(#[from] notify::Error),
+
+    #[error(transparent)]
+    Migration(#[from] Box<dyn std::error::Error + Send + Sync>),
+}
 
 #[derive(Clone)]
 pub struct Lowboy<AC: AppContext> {
@@ -58,7 +91,7 @@ pub struct Lowboy<AC: AppContext> {
 struct MigrationWriter;
 impl std::io::Write for MigrationWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let mut line = String::from_utf8(buf.into()).unwrap();
+        let mut line = String::from_utf8(buf.into()).map_err(std::io::Error::other)?;
 
         // Remove trailing newline.
         line.pop();
@@ -74,22 +107,20 @@ impl std::io::Write for MigrationWriter {
 }
 
 impl<AC: CloneableAppContext> Lowboy<AC> {
-    pub async fn boot() -> Self {
-        let config = Config::load(None).unwrap();
-        let context = create_context::<AC>(&config).await.unwrap();
+    pub async fn boot() -> Result<Self> {
+        let config = Config::load(None)?;
+        let context = create_context::<AC>(&config).await?;
 
-        let mut conn = context.database().get().await.unwrap();
-        conn.spawn_blocking(|conn| Self::run_migrations(conn))
-            .await
-            .unwrap();
+        let mut conn = context.database().get().await?;
+        conn.spawn_blocking(|conn| Ok(Self::run_migrations(conn)))
+            .await??;
 
-        Self { config, context }
+        Ok(Self { config, context })
     }
 
-    fn run_migrations(conn: &mut impl MigrationHarness<Sqlite>) -> QueryResult<()> {
+    fn run_migrations(conn: &mut impl MigrationHarness<Sqlite>) -> Result<()> {
         HarnessWithOutput::new(conn, LineWriter::new(MigrationWriter))
-            .run_pending_migrations(MIGRATIONS)
-            .unwrap();
+            .run_pending_migrations(MIGRATIONS)?;
         Ok(())
     }
 
@@ -144,7 +175,7 @@ impl<AC: CloneableAppContext> Lowboy<AC> {
         let (router, _watcher) = livereload(router)?;
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:3000").await?;
-        info!("listening on {}", listener.local_addr().unwrap());
+        info!("listening on {}", listener.local_addr()?);
 
         axum::serve(
             listener,

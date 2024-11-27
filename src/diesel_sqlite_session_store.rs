@@ -12,20 +12,22 @@ use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::RunQueryDsl;
 
+type Result<T> = std::result::Result<T, Error>;
+
 /// An error type for SQLx stores.
 #[derive(thiserror::Error, Debug)]
-pub enum DieselStoreError {
+pub enum Error {
     /// A variant to map `sqlx` errors.
     #[error(transparent)]
     Diesel(#[from] diesel::result::Error),
 
     /// A variant to map `deadpool_diesel` pool errors.
     #[error(transparent)]
-    PoolError(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
+    Pool(#[from] deadpool::managed::PoolError<diesel_async::pooled_connection::PoolError>),
 
     /// A variant to map `deadpool_diesel` interact errors.
     #[error(transparent)]
-    InteractError(#[from] deadpool_diesel::InteractError),
+    Interact(#[from] deadpool_diesel::InteractError),
 
     /// A variant to map `rmp_serde` encode errors.
     #[error(transparent)]
@@ -36,16 +38,14 @@ pub enum DieselStoreError {
     Decode(#[from] rmp_serde::decode::Error),
 }
 
-impl From<DieselStoreError> for session_store::Error {
-    fn from(err: DieselStoreError) -> Self {
+impl From<Error> for session_store::Error {
+    fn from(err: Error) -> Self {
         match err {
-            DieselStoreError::Diesel(inner) => session_store::Error::Backend(inner.to_string()),
-            DieselStoreError::PoolError(inner) => session_store::Error::Backend(inner.to_string()),
-            DieselStoreError::InteractError(inner) => {
-                session_store::Error::Backend(inner.to_string())
-            }
-            DieselStoreError::Decode(inner) => session_store::Error::Decode(inner.to_string()),
-            DieselStoreError::Encode(inner) => session_store::Error::Encode(inner.to_string()),
+            Error::Diesel(inner) => session_store::Error::Backend(inner.to_string()),
+            Error::Pool(inner) => session_store::Error::Backend(inner.to_string()),
+            Error::Interact(inner) => session_store::Error::Backend(inner.to_string()),
+            Error::Decode(inner) => session_store::Error::Decode(inner.to_string()),
+            Error::Encode(inner) => session_store::Error::Encode(inner.to_string()),
         }
     }
 }
@@ -74,18 +74,6 @@ pub struct DieselSqliteSessionStore {
 }
 
 impl DieselSqliteSessionStore {
-    /// Create a new SQLite store with the provided connection pool.
-    ///
-    /// # Examples
-    ///
-    /// ```rust,no_run
-    /// use tower_sessions_sqlx_store::{sqlx::SqlitePool, SqliteStore};
-    ///
-    /// # tokio_test::block_on(async {
-    /// let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-    /// let session_store = SqliteStore::new(pool);
-    /// # })
-    /// ```
     pub fn new(database: Pool<SyncConnectionWrapper<SqliteConnection>>) -> Self {
         Self { database }
     }
@@ -101,15 +89,11 @@ impl DieselSqliteSessionStore {
             )
             "#;
 
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
         sql_query(query.to_string())
             .execute(&mut conn)
             .await
-            .map_err(DieselStoreError::Diesel)?;
+            .map_err(Error::Diesel)?;
 
         Ok(())
     }
@@ -118,16 +102,12 @@ impl DieselSqliteSessionStore {
 #[async_trait]
 impl ExpiredDeletion for DieselSqliteSessionStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
         diesel::delete(tower_sessions::table)
             .filter(tower_sessions::expiry_date.lt(chrono::Utc::now().timestamp()))
             .execute(&mut conn)
             .await
-            .map_err(DieselStoreError::Diesel)?;
+            .map_err(Error::Diesel)?;
         Ok(())
     }
 }
@@ -138,10 +118,10 @@ impl SessionStore for DieselSqliteSessionStore {
         async fn try_create_with_conn(
             conn: &mut SyncConnectionWrapper<SqliteConnection>,
             record: &Record,
-        ) -> session_store::Result<bool> {
+        ) -> Result<bool> {
             let new_session = TowerSession {
                 id: record.id.to_string(),
-                data: rmp_serde::to_vec(&record).unwrap(),
+                data: rmp_serde::to_vec(&record)?,
                 expiry_date: record.expiry_date.unix_timestamp(),
             };
             let res = diesel::insert_into(tower_sessions::table)
@@ -151,26 +131,20 @@ impl SessionStore for DieselSqliteSessionStore {
 
             match res {
                 Ok(_) => Ok(true),
-                Err(diesel::result::Error::DatabaseError(kind, _)) => {
+                Err(err @ diesel::result::Error::DatabaseError(kind, _)) => {
                     if let DatabaseErrorKind::UniqueViolation = kind {
                         Ok(false)
                     } else {
-                        Err(DieselStoreError::Diesel(res.err().unwrap()).into())
+                        Err(Error::Diesel(err))
                     }
                 }
-                // @TODO why is this commented out :x
-                // Err(sqlx::Error::Database(e)) if e.is_unique_violation() => Ok(false),
-                Err(e) => Err(DieselStoreError::Diesel(e).into()),
+                Err(e) => Err(Error::Diesel(e)),
             }
         }
 
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
 
-        while !try_create_with_conn(&mut conn, record).await.unwrap() {
+        while !try_create_with_conn(&mut conn, record).await? {
             record.id = Id::default(); // Generate a new ID
         }
 
@@ -181,10 +155,10 @@ impl SessionStore for DieselSqliteSessionStore {
         async fn save_with_conn(
             conn: &mut SyncConnectionWrapper<SqliteConnection>,
             record: &Record,
-        ) -> session_store::Result<()> {
+        ) -> Result<()> {
             let new_session = TowerSession {
                 id: record.id.to_string(),
-                data: rmp_serde::to_vec(&record).unwrap(),
+                data: rmp_serde::to_vec(&record)?,
                 expiry_date: record.expiry_date.unix_timestamp(),
             };
             diesel::insert_into(tower_sessions::table)
@@ -197,15 +171,11 @@ impl SessionStore for DieselSqliteSessionStore {
                 ))
                 .execute(conn)
                 .await
-                .map_err(DieselStoreError::Diesel)?;
+                .map_err(Error::Diesel)?;
 
             Ok(())
         }
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
 
         save_with_conn(&mut conn, record).await?;
 
@@ -213,11 +183,7 @@ impl SessionStore for DieselSqliteSessionStore {
     }
 
     async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
 
         let session = tower_sessions::dsl::tower_sessions
             .filter(tower_sessions::id.eq(session_id.to_string()))
@@ -227,7 +193,7 @@ impl SessionStore for DieselSqliteSessionStore {
 
         if let Ok(session) = session {
             Ok(Some(
-                rmp_serde::from_slice(&session.data).map_err(DieselStoreError::Decode)?,
+                rmp_serde::from_slice(&session.data).map_err(Error::Decode)?,
             ))
         } else {
             return Ok(None);
@@ -235,17 +201,13 @@ impl SessionStore for DieselSqliteSessionStore {
     }
 
     async fn delete(&self, session_id: &Id) -> session_store::Result<()> {
-        let mut conn = self
-            .database
-            .get()
-            .await
-            .map_err(DieselStoreError::PoolError)?;
+        let mut conn = self.database.get().await.map_err(Error::Pool)?;
 
         diesel::delete(tower_sessions::table)
             .filter(tower_sessions::id.eq(session_id.to_string()))
             .execute(&mut conn)
             .await
-            .map_err(DieselStoreError::Diesel)?;
+            .map_err(Error::Diesel)?;
 
         Ok(())
     }

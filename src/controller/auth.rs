@@ -135,21 +135,20 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
         Err(_) => messages.error("An unknown error occurred"),
     };
 
-    Ok(if res.is_err() {
+    Ok(if let Ok((user, Operation::Create)) = res {
+        context
+            .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
+            .await?;
+
+        Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
+    } else {
         session.insert(REGISTRATION_FORM_KEY, input.clone()).await?;
+
         if let Some(next) = input.next().to_owned() {
             Redirect::to(&format!("/register?next={next}"))
         } else {
             Redirect::to("/register")
         }
-    } else {
-        if let (user, Operation::Create) = res.expect("checked for error") {
-            context
-                .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
-                .await?;
-        }
-
-        Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
     }
     .into_response())
 }
@@ -248,15 +247,8 @@ pub async fn oauth_init<App: app::App<AC>, AC: CloneableAppContext>(
         ))?;
     };
 
-    session
-        .insert(CSRF_STATE_KEY, csrf_state.secret())
-        .await
-        .expect("Serialization should not fail");
-
-    session
-        .insert(NEXT_URL_KEY, input.next())
-        .await
-        .expect("Serialization should not fail");
+    session.insert(CSRF_STATE_KEY, csrf_state.secret()).await?;
+    session.insert(NEXT_URL_KEY, input.next()).await?;
 
     Ok(Redirect::to(auth_url.as_str()).into_response())
 }
