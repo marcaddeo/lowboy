@@ -768,24 +768,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dotenvy"
-version = "0.15.7"
-source = "git+https://github.com/allan2/dotenvy#e2da110668572cf2d67178f192eb1fc285224040"
-dependencies = [
- "dotenvy-macros",
-]
-
-[[package]]
-name = "dotenvy-macros"
-version = "0.15.7"
-source = "git+https://github.com/allan2/dotenvy#e2da110668572cf2d67178f192eb1fc285224040"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "dsl_auto_type"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1716,7 +1698,6 @@ dependencies = [
  "diesel-async",
  "diesel-tracing",
  "diesel_migrations",
- "dotenvy",
  "dyn-clone",
  "fake",
  "flume",
