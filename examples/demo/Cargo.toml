@@ -30,7 +30,6 @@ diesel = { version = "2.2.4", features = [
 ] }
 diesel-async = { version = "0.5.1", features = ["deadpool", "pool", "sqlite"] }
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
-fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
 notify = "7.0.0"

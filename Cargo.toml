@@ -37,7 +37,6 @@ diesel-tracing = { git = "https://github.com/marcaddeo/diesel-tracing", branch =
 ] }
 diesel_migrations = { version = "2.2.0", features = ["sqlite"] }
 dyn-clone = "1.0.17"
-fake = { version = "3.0.0", features = ["derive"] }
 flume = "0.11.1"
 futures = "0.3.31"
 gravatar_api = "0.3.0"
