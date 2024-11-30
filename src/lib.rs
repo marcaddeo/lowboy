@@ -6,6 +6,8 @@ use axum_login::{
 };
 use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
+use clap::Parser as _;
+use cli::{Cli, Command};
 use config::Config;
 use context::{create_context, CloneableAppContext};
 use diesel::sqlite::{Sqlite, SqliteConnection};
@@ -24,6 +26,7 @@ use tracing::info;
 
 mod app;
 pub mod auth;
+pub mod cli;
 mod config;
 pub mod context;
 pub mod controller;
@@ -109,6 +112,12 @@ impl std::io::Write for MigrationWriter {
 
 impl<AC: CloneableAppContext> Lowboy<AC> {
     pub async fn boot() -> Result<Self> {
+        // let cli = Cli::parse();
+        // match &cli.command {
+        //     Some(Command::ConfigTemplate) => return Ok(config::print_config_template()),
+        //     Some(Command::ConfigInit { config_path }) => return init(config_path.clone()),
+        //     None => (),
+        // }
         let config = Config::load(None)?;
         let context = create_context::<AC>(&config).await?;
 

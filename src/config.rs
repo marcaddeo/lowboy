@@ -50,6 +50,18 @@ impl Config {
     }
 }
 
+pub fn init_config(config_path: Option<PathBuf>) -> Result<()> {
+    // @TODO this will overwrite an existing config with no warning.
+    let config_path = write_config_template(config_path)?;
+
+    println!(
+        "Configuration file created: {}",
+        config_path.to_str().unwrap()
+    );
+
+    Ok(())
+}
+
 pub fn get_config_template() -> String {
     confique::yaml::template::<Config>(FormatOptions::default())
 }
