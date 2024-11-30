@@ -591,6 +591,7 @@ dependencies = [
  "diesel_migrations",
  "flume",
  "futures",
+ "lettre",
  "lowboy",
  "lowboy_record",
  "notify",
