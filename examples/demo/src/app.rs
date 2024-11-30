@@ -15,6 +15,7 @@ use axum::{
 };
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
+use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use lowboy::{
     auth::{LowboyLoginForm, RegistrationDetails},
     context,
@@ -28,6 +29,7 @@ pub struct DemoContext {
     pub database: Pool<Connection>,
     pub events: Events,
     pub scheduler: JobScheduler,
+    pub mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
     #[allow(dead_code)]
     pub my_custom_thing: Vec<String>,
 }
@@ -38,12 +40,14 @@ impl AppContext for DemoContext {
         database: Pool<Connection>,
         events: Events,
         scheduler: JobScheduler,
+        mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
     ) -> Result<Self, context::Error> {
         Ok(Self {
             database,
             events,
             scheduler,
             my_custom_thing: vec![],
+            mailer,
         })
     }
 
@@ -95,6 +99,10 @@ impl Context for DemoContext {
 
     fn scheduler(&self) -> &JobScheduler {
         &self.scheduler
+    }
+
+    fn mailer(&self) -> Option<&AsyncSmtpTransport<Tokio1Executor>> {
+        self.mailer.as_ref()
     }
 }
 

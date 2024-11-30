@@ -3,7 +3,7 @@ use confique::{yaml::FormatOptions, Config as _};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::auth::IdentityProviderConfig;
+use crate::{auth::IdentityProviderConfig, mailer};
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
@@ -34,8 +34,11 @@ pub struct Config {
     #[config(env = "LOWBOY_SESSION_KEY")]
     pub session_key: String,
 
-    // OAuth Provider Configuration
+    /// OAuth Provider Configuration
     pub oauth_providers: Vec<IdentityProviderConfig>,
+
+    /// Mailer configuration
+    pub mailer: Option<mailer::Config>,
 }
 
 impl Config {

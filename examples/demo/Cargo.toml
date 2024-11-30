@@ -53,3 +53,4 @@ xdg = "2.5.2"
 rinja = "0.3.5"
 rinja_axum = "0.3.5"
 typetag = "0.2.18"
+lettre = { version = "0.11.10", features = ["tokio1-native-tls"] }

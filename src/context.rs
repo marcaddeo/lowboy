@@ -10,6 +10,8 @@ use diesel_async::{AsyncConnection, SimpleAsyncConnection};
 use dyn_clone::DynClone;
 use flume::{Receiver, Sender};
 use futures::FutureExt;
+use lettre::transport::smtp::authentication::Credentials;
+use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use tokio_cron_scheduler::JobScheduler;
 
 type Result<T> = std::result::Result<T, Error>;
@@ -34,6 +36,15 @@ pub enum Error {
     JobScheduler(#[from] tokio_cron_scheduler::JobSchedulerError),
 
     #[error(transparent)]
+    LettreSmtp(#[from] lettre::transport::smtp::Error),
+
+    #[error(transparent)]
+    LettreAddress(#[from] lettre::address::AddressError),
+
+    #[error(transparent)]
+    LettreError(#[from] lettre::error::Error),
+
+    #[error(transparent)]
     App(#[from] anyhow::Error),
 }
 
@@ -51,12 +62,18 @@ pub trait Context: Send + Sync + 'static {
     fn database(&self) -> &Pool<Connection>;
     fn events(&self) -> &Events;
     fn scheduler(&self) -> &JobScheduler;
+    fn mailer(&self) -> Option<&AsyncSmtpTransport<Tokio1Executor>>;
 }
 
 #[allow(unused_variables)]
 #[async_trait::async_trait]
 pub trait AppContext: Context + DynClone {
-    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self>
+    fn create(
+        database: Pool<Connection>,
+        events: Events,
+        scheduler: JobScheduler,
+        mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
+    ) -> Result<Self>
     where
         Self: Sized;
 
@@ -79,6 +96,7 @@ pub struct LowboyContext {
     pub events: (Sender<Event>, Receiver<Event>),
     #[allow(dead_code)]
     pub scheduler: JobScheduler,
+    pub mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
 }
 
 impl Context for LowboyContext {
@@ -93,14 +111,24 @@ impl Context for LowboyContext {
     fn scheduler(&self) -> &JobScheduler {
         &self.scheduler
     }
+
+    fn mailer(&self) -> Option<&AsyncSmtpTransport<Tokio1Executor>> {
+        self.mailer.as_ref()
+    }
 }
 
 impl AppContext for LowboyContext {
-    fn create(database: Pool<Connection>, events: Events, scheduler: JobScheduler) -> Result<Self> {
+    fn create(
+        database: Pool<Connection>,
+        events: Events,
+        scheduler: JobScheduler,
+        mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
+    ) -> Result<Self> {
         Ok(Self {
             database,
             events,
             scheduler,
+            mailer,
         })
     }
 }
@@ -119,6 +147,10 @@ impl Context for () {
     fn scheduler(&self) -> &JobScheduler {
         unreachable!()
     }
+
+    fn mailer(&self) -> Option<&AsyncSmtpTransport<Tokio1Executor>> {
+        unreachable!()
+    }
 }
 
 impl AppContext for () {
@@ -126,6 +158,7 @@ impl AppContext for () {
         _database: Pool<Connection>,
         _events: Events,
         _scheduler: JobScheduler,
+        _mailer: Option<AsyncSmtpTransport<Tokio1Executor>>,
     ) -> Result<Self>
     where
         Self: Sized,
@@ -174,5 +207,18 @@ pub async fn create_context<AC: AppContext>(config: &Config) -> Result<AC> {
     let scheduler = JobScheduler::new().await?;
     scheduler.start().await?;
 
-    AC::create(database, events, scheduler)
+    let mailer: Option<AsyncSmtpTransport<Tokio1Executor>> = if let Some(conf) = &config.mailer {
+        Some(
+            AsyncSmtpTransport::<Tokio1Executor>::relay(&conf.smtp_relay)?
+                .credentials(Credentials::new(
+                    conf.smtp_username.to_string(),
+                    conf.smtp_password.to_string(),
+                ))
+                .build(),
+        )
+    } else {
+        None
+    };
+
+    AC::create(database, events, scheduler, mailer)
 }

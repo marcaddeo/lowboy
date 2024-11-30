@@ -30,6 +30,7 @@ pub mod controller;
 mod diesel_sqlite_session_store;
 pub mod error;
 pub mod extract;
+mod mailer;
 pub mod model;
 mod schema;
 pub mod view;
