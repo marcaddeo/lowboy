@@ -220,13 +220,6 @@ impl Post {
             ))
     }
 
-    pub async fn find(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Post::all()
-            .filter(post::id.eq(id))
-            .first::<Post>(conn)
-            .await
-    }
-
     pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
         Post::all()
             .limit(limit.unwrap_or(100))
@@ -246,6 +239,9 @@ pub trait Loadable {
 #[async_trait::async_trait]
 impl Loadable for Post {
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Post::find(id, conn).await
+        Post::all()
+            .filter(post::id.eq(id))
+            .first::<Post>(conn)
+            .await
     }
 }
