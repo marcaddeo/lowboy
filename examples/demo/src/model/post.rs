@@ -5,7 +5,7 @@ use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::LowboyUser;
+use lowboy::model::{LowboyUser, Model};
 use lowboy::Connection;
 
 /// A `Post` record
@@ -156,25 +156,78 @@ pub struct Post {
     pub content: String,
 }
 
-type PostFields = (
-    post::SqlType,
-    user::SqlType,
-    SqlTypeOf<lowboy_user::username>,
-    SqlTypeOf<lowboy_user::email>,
-);
+#[async_trait::async_trait]
+impl Model for Post {
+    type Record = PostRecord;
 
-type PostSelect = (
-    AsSelect<PostRecord, Sqlite>,
-    AsSelect<UserRecord, Sqlite>,
-    SqlTypeOf<lowboy_user::username>,
-    SqlTypeOf<lowboy_user::email>,
-);
+    type RowSqlType = (
+        post::SqlType,
+        user::SqlType,
+        SqlTypeOf<lowboy_user::username>,
+        SqlTypeOf<lowboy_user::email>,
+    );
 
-impl CompatibleType<Post, Sqlite> for PostSelect {
-    type SqlType = PostFields;
+    type Selection = (
+        AsSelect<PostRecord, Sqlite>,
+        AsSelect<UserRecord, Sqlite>,
+        SqlTypeOf<lowboy_user::username>,
+        SqlTypeOf<lowboy_user::email>,
+    );
+
+    type Query = Select<
+        InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>,
+        (
+            AsSelect<PostRecord, Sqlite>,
+            AsSelect<UserRecord, Sqlite>,
+            lowboy_user::username,
+            lowboy_user::email,
+        ),
+    >;
+
+    fn query() -> Self::Query {
+        post::table
+            .inner_join(user::table.inner_join(lowboy_user::table))
+            .select((
+                PostRecord::as_select(),
+                UserRecord::as_select(),
+                lowboy_user::username,
+                lowboy_user::email,
+            ))
+    }
+
+    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        Self::query()
+            .filter(post::id.eq(id))
+            .first::<Post>(conn)
+            .await
+    }
 }
 
-impl Queryable<PostFields, Sqlite> for Post {
+// build_model!(Post, {
+//     let (post_record, user_record, username, email) = row;
+//
+//     Ok(Self {
+//         id: post_record.id,
+//         user: User {
+//             id: user_record.id,
+//             lowboy_user: LowboyUser {
+//                 username,
+//                 email,
+//                 ..Default::default()
+//             },
+//             name: user_record.name,
+//             avatar: user_record.avatar,
+//             byline: user_record.byline,
+//         },
+//         content: post_record.content,
+//     })
+// })
+
+impl CompatibleType<Post, Sqlite> for <Post as Model>::Selection {
+    type SqlType = <Post as Model>::RowSqlType;
+}
+
+impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
     type Row = (PostRecord, UserRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -198,50 +251,12 @@ impl Queryable<PostFields, Sqlite> for Post {
     }
 }
 
-type All = Select<
-    InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>,
-    (
-        AsSelect<PostRecord, Sqlite>,
-        AsSelect<UserRecord, Sqlite>,
-        lowboy_user::username,
-        lowboy_user::email,
-    ),
->;
-
 impl Post {
-    pub fn all() -> All {
-        post::table
-            .inner_join(user::table.inner_join(lowboy_user::table))
-            .select((
-                PostRecord::as_select(),
-                UserRecord::as_select(),
-                lowboy_user::username,
-                lowboy_user::email,
-            ))
-    }
-
     pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
-        Post::all()
+        Post::query()
             .limit(limit.unwrap_or(100))
             .order_by(post::id.desc())
             .load::<Post>(conn)
-            .await
-    }
-}
-
-#[async_trait::async_trait]
-pub trait Loadable {
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized;
-}
-
-#[async_trait::async_trait]
-impl Loadable for Post {
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Post::all()
-            .filter(post::id.eq(id))
-            .first::<Post>(conn)
             .await
     }
 }
