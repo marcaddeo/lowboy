@@ -14,3 +14,6 @@ alias e := edit
 # Edit the justfile
 @edit:
     $EDITOR "{{ justfile() }}"
+
+@fmt *args:
+    cargo +nightly fmt {{ args }}
