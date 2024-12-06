@@ -1,14 +1,15 @@
-use crate::schema::lowboy_user;
-use crate::Connection;
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
+use diesel::prelude::*;
 use diesel::upsert::excluded;
-use diesel::{insert_into, prelude::*};
-use diesel::{OptionalExtension, QueryResult, Selectable};
+use diesel::{insert_into, OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
 use lowboy_record::prelude::*;
+
+use crate::schema::lowboy_user;
+use crate::Connection;
 
 pub trait ModelRecord {}
 

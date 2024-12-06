@@ -1,12 +1,11 @@
-use crate::{
-    app, context::CloneableAppContext, error::LowboyError, model::FromRecord as _, AppContext,
-    AuthSession, Connection,
-};
-use axum::{
-    extract::{FromRef, FromRequestParts},
-    http::request::Parts,
-};
+use axum::extract::{FromRef, FromRequestParts};
+use axum::http::request::Parts;
 use diesel_async::pooled_connection::deadpool::{Object, Pool};
+
+use crate::context::CloneableAppContext;
+use crate::error::LowboyError;
+use crate::model::FromRecord as _;
+use crate::{app, AppContext, AuthSession, Connection};
 
 pub struct DatabaseConnection(pub Object<Connection>);
 

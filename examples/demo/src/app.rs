@@ -1,28 +1,19 @@
-use crate::{
-    controller,
-    form::RegisterForm,
-    model::User,
-    view::{
-        self,
-        auth::{Login, Register},
-        Layout,
-    },
-};
 use anyhow::Context as _;
-use axum::{
-    routing::{get, post},
-    Router,
-};
+use axum::routing::{get, post};
+use axum::Router;
 use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
-use lowboy::{
-    auth::{LowboyLoginForm, RegistrationDetails},
-    context,
-    model::LowboyUserRecord,
-    App, AppContext, Connection, Context, Events, LowboyAuth,
-};
+use lowboy::auth::{LowboyLoginForm, RegistrationDetails};
+use lowboy::model::LowboyUserRecord;
+use lowboy::{context, App, AppContext, Connection, Context, Events, LowboyAuth};
 use tokio_cron_scheduler::JobScheduler;
+
+use crate::controller;
+use crate::form::RegisterForm;
+use crate::model::User;
+use crate::view::auth::{Login, Register};
+use crate::view::{self, Layout};
 
 #[derive(Clone)]
 pub struct DemoContext {

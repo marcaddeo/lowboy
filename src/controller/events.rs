@@ -1,12 +1,13 @@
-use crate::{shutdown_signal, AppContext};
-use axum::{
-    extract::State,
-    response::sse::{Event, Sse},
-};
+use std::convert::Infallible;
+use std::time::Duration;
+
+use axum::extract::State;
+use axum::response::sse::{Event, Sse};
 use axum_extra::{headers, TypedHeader};
 use futures::{Stream, StreamExt as _};
-use std::{convert::Infallible, time::Duration};
 use tracing::info;
+
+use crate::{shutdown_signal, AppContext};
 
 pub async fn events<T: AppContext>(
     State(context): State<T>,

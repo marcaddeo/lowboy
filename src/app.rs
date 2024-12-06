@@ -1,13 +1,12 @@
-use crate::{
-    auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm},
-    context::CloneableAppContext,
-    controller,
-    error::{LowboyError, LowboyErrorView},
-    model::{LowboyUserRecord, LowboyUserTrait},
-    view::LowboyLayout,
-};
 use axum::Router;
 use serde::{Deserialize, Serialize};
+
+use crate::auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm};
+use crate::context::CloneableAppContext;
+use crate::controller;
+use crate::error::{LowboyError, LowboyErrorView};
+use crate::model::{LowboyUserRecord, LowboyUserTrait};
+use crate::view::LowboyLayout;
 
 #[allow(unused_variables)]
 pub trait App<AC: CloneableAppContext>: Send + 'static {

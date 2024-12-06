@@ -1,6 +1,7 @@
-use crate::form::DemoRegistrationForm;
 use lowboy::auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm};
 use rinja::Template;
+
+use crate::form::DemoRegistrationForm;
 
 #[derive(Clone, Template, Default)]
 #[template(path = "pages/auth/login.html")]

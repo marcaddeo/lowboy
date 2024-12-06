@@ -1,14 +1,12 @@
-use crate::{
-    app::{Demo, DemoContext},
-    model::Post,
-    view,
-};
-use axum::{extract::Form, response::IntoResponse};
-use lowboy::{
-    error::LowboyError,
-    extract::{DatabaseConnection, EnsureAppUser},
-};
+use axum::extract::Form;
+use axum::response::IntoResponse;
+use lowboy::error::LowboyError;
+use lowboy::extract::{DatabaseConnection, EnsureAppUser};
 use serde::Deserialize;
+
+use crate::app::{Demo, DemoContext};
+use crate::model::Post;
+use crate::view;
 
 #[derive(Debug, Deserialize)]
 pub struct PostCreateForm {

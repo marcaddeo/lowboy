@@ -1,13 +1,11 @@
-use crate::schema::user;
 use diesel::associations::HasTable as _;
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
-use lowboy::model::FromRecord;
-use lowboy::model::LowboyUser;
-use lowboy::model::LowboyUserRecord;
-use lowboy::model::LowboyUserTrait;
+use lowboy::model::{FromRecord, LowboyUser, LowboyUserRecord, LowboyUserTrait};
 use lowboy::Connection;
 use lowboy_record::prelude::*;
+
+use crate::schema::user;
 
 pub trait DemoUser {
     fn name(&self) -> &String;

@@ -1,11 +1,12 @@
-use super::User;
-use crate::schema::{lowboy_user, post};
-use crate::{model::UserRecord, schema::user};
 use diesel::prelude::*;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{LowboyUser, LowboyUserRecord};
 use lowboy::Connection;
 use lowboy_record::prelude::*;
+
+use super::User;
+use crate::model::UserRecord;
+use crate::schema::{lowboy_user, post, user};
 
 #[apply(lowboy_record!)]
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]

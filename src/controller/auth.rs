@@ -1,32 +1,27 @@
 use anyhow::anyhow;
-use axum::{
-    extract::{Path, Query, State},
-    response::{IntoResponse, Redirect},
-    routing::{get, post},
-    Form, Router,
-};
+use axum::extract::{Path, Query, State};
+use axum::response::{IntoResponse, Redirect};
+use axum::routing::{get, post};
+use axum::{Form, Router};
 use axum_messages::Messages;
-use diesel::result::{DatabaseErrorKind, Error::DatabaseError};
+use diesel::result::DatabaseErrorKind;
+use diesel::result::Error::DatabaseError;
 use oauth2::CsrfToken;
 use serde::Deserialize;
 use tower_sessions::Session;
 use validator::{Validate, ValidationErrorsKind};
 
-use crate::{
-    app,
-    auth::{
-        IdentityProvider, LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails,
-        RegistrationForm,
-    },
-    context::CloneableAppContext,
-    error::LowboyError,
-    lowboy_view,
-    model::{
-        CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation,
-        PasswordCredentials,
-    },
-    AuthSession,
+use crate::auth::{
+    IdentityProvider, LoginForm, LowboyLoginView as _, LowboyRegisterView, RegistrationDetails,
+    RegistrationForm,
 };
+use crate::context::CloneableAppContext;
+use crate::error::LowboyError;
+use crate::model::{
+    CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation,
+    PasswordCredentials,
+};
+use crate::{app, lowboy_view, AuthSession};
 
 const NEXT_URL_KEY: &str = "auth.next-url";
 const CSRF_STATE_KEY: &str = "oauth.csrf-state";

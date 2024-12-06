@@ -1,8 +1,11 @@
 use std::sync::Arc;
 
-use crate::{context, view::LowboyView};
 use anyhow::anyhow;
-use axum::{http::StatusCode, response::IntoResponse};
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+
+use crate::context;
+use crate::view::LowboyView;
 
 #[derive(Debug, thiserror::Error)]
 pub enum LowboyError {

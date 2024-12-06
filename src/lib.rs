@@ -1,9 +1,11 @@
-use axum::{middleware, response::sse::Event, routing::get, Router};
-use axum_login::{
-    login_required,
-    tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer},
-    AuthManagerLayerBuilder,
-};
+use std::io::LineWriter;
+use std::time::Duration;
+
+use axum::response::sse::Event;
+use axum::routing::get;
+use axum::{middleware, Router};
+use axum_login::tower_sessions::{ExpiredDeletion, Expiry, SessionManagerLayer};
+use axum_login::{login_required, AuthManagerLayerBuilder};
 use axum_messages::MessagesManagerLayer;
 use base64::prelude::*;
 use config::Config;
@@ -16,8 +18,8 @@ use diesel_migrations::{
 use diesel_sqlite_session_store::DieselSqliteSessionStore;
 use error::LowboyError;
 use flume::{Receiver, Sender};
-use std::{io::LineWriter, time::Duration};
-use tokio::{signal, task::AbortHandle};
+use tokio::signal;
+use tokio::task::AbortHandle;
 use tower_http::services::ServeDir;
 use tower_sessions::cookie::{self, Key};
 use tracing::info;
@@ -35,11 +37,9 @@ pub mod model;
 mod schema;
 pub mod view;
 
-pub use {
-    app::App,
-    auth::{AuthSession, LowboyAuth},
-    context::{AppContext, Context, LowboyContext},
-};
+pub use app::App;
+pub use auth::{AuthSession, LowboyAuth};
+pub use context::{AppContext, Context, LowboyContext};
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 

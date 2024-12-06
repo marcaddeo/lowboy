@@ -1,9 +1,12 @@
 #![allow(dead_code)]
-use confique::{yaml::FormatOptions, Config as _};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-use crate::{auth::IdentityProviderConfig, mailer};
+use confique::yaml::FormatOptions;
+use confique::Config as _;
+use serde::{Deserialize, Serialize};
+
+use crate::auth::IdentityProviderConfig;
+use crate::mailer;
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]

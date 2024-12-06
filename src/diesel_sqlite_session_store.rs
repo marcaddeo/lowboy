@@ -1,13 +1,10 @@
-use ::tower_sessions::{
-    session::{Id, Record},
-    session_store, ExpiredDeletion, SessionStore,
-};
+use ::tower_sessions::session::{Id, Record};
+use ::tower_sessions::{session_store, ExpiredDeletion, SessionStore};
 use async_trait::async_trait;
+use diesel::deserialize::QueryableByName;
 use diesel::prelude::*;
-use diesel::{
-    deserialize::QueryableByName, result::DatabaseErrorKind, sql_query, table, Selectable,
-    SqliteConnection,
-};
+use diesel::result::DatabaseErrorKind;
+use diesel::{sql_query, table, Selectable, SqliteConnection};
 use diesel_async::pooled_connection::deadpool::Pool;
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::RunQueryDsl;

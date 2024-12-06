@@ -1,20 +1,17 @@
-use crate::{
-    app,
-    auth::AuthSession,
-    context::CloneableAppContext,
-    error::{ErrorWrapper, LowboyError, LowboyErrorView},
-    lowboy_view,
-    model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait},
-};
-use axum::{
-    body::Body,
-    extract::State,
-    http::StatusCode,
-    response::{Html, IntoResponse, Response},
-};
+use std::collections::BTreeMap;
+
+use axum::body::Body;
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::{Html, IntoResponse, Response};
 use axum_messages::{Message, Messages};
 use dyn_clone::DynClone;
-use std::collections::BTreeMap;
+
+use crate::auth::AuthSession;
+use crate::context::CloneableAppContext;
+use crate::error::{ErrorWrapper, LowboyError, LowboyErrorView};
+use crate::model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait};
+use crate::{app, lowboy_view};
 
 pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
     State(state): State<AC>,

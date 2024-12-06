@@ -1,10 +1,8 @@
-use crate::config::Config;
-use crate::{auth::RegistrationDetails, model::LowboyUserRecord, Connection, Events};
 use axum::response::sse::Event;
 use diesel::sqlite::SqliteConnection;
 use diesel::ConnectionError;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::pooled_connection::{deadpool::Pool, ManagerConfig};
+use diesel_async::pooled_connection::deadpool::Pool;
+use diesel_async::pooled_connection::{AsyncDieselConnectionManager, ManagerConfig};
 use diesel_async::sync_connection_wrapper::SyncConnectionWrapper;
 use diesel_async::{AsyncConnection, SimpleAsyncConnection};
 use dyn_clone::DynClone;
@@ -13,6 +11,11 @@ use futures::FutureExt;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use tokio_cron_scheduler::JobScheduler;
+
+use crate::auth::RegistrationDetails;
+use crate::config::Config;
+use crate::model::LowboyUserRecord;
+use crate::{Connection, Events};
 
 type Result<T> = std::result::Result<T, Error>;
 

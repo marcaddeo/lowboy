@@ -1,10 +1,9 @@
-use crate::model::DemoUser;
 use axum_messages::Message;
-use lowboy::{
-    model::{LowboyUserRecord, LowboyUserTrait},
-    view::{LayoutContext, LowboyLayout},
-};
+use lowboy::model::{LowboyUserRecord, LowboyUserTrait};
+use lowboy::view::{LayoutContext, LowboyLayout};
 use rinja::Template;
+
+use crate::model::DemoUser;
 
 #[derive(Template, Default)]
 #[template(path = "layout.html")]

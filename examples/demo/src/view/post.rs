@@ -1,6 +1,7 @@
+use rinja::Template;
+
 use crate::model;
 use crate::model::DemoUser as _;
-use rinja::Template;
 
 #[derive(Clone, Template)]
 #[template(path = "components/post.html")]

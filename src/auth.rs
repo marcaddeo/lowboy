@@ -1,29 +1,29 @@
 #![allow(clippy::transmute_ptr_to_ref)]
-use crate::{
-    model::{
-        CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
-    },
-    view::LowboyView,
-    AppContext,
-};
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use axum_login::AuthnBackend;
 use derive_masked::DebugMasked;
 use derive_more::derive::Display;
 use dyn_clone::DynClone;
 use mopa::mopafy;
+use oauth2::basic::{BasicClient, BasicRequestTokenError};
+use oauth2::http::header::{AUTHORIZATION, USER_AGENT};
+use oauth2::reqwest::{async_http_client, AsyncHttpClientError};
+use oauth2::url::Url;
 use oauth2::{
-    basic::{BasicClient, BasicRequestTokenError},
-    http::header::{AUTHORIZATION, USER_AGENT},
-    reqwest::{async_http_client, AsyncHttpClientError},
-    url::Url,
     AccessToken, AuthUrl, AuthorizationCode, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope,
     TokenResponse, TokenUrl,
 };
 use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use validator::Validate;
+
+use crate::model::{
+    CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
+};
+use crate::view::LowboyView;
+use crate::AppContext;
 
 pub type AuthSession = axum_login::AuthSession<LowboyAuth>;
 type Result<T> = std::result::Result<T, Error>;

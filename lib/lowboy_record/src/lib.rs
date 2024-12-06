@@ -6,10 +6,7 @@ pub use macro_rules_attribute::apply;
 pub use paste::paste;
 
 pub mod prelude {
-    pub use crate::apply;
-    pub use crate::lowboy_record;
-    pub use crate::HasOne;
-    pub use crate::Related;
+    pub use crate::{apply, lowboy_record, HasOne, Related};
 }
 
 /// A marker to designate a field as being a related model.

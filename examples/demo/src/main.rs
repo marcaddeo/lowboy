@@ -1,6 +1,7 @@
 use app::Demo;
 use lowboy::Lowboy;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt as _};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt as _;
 
 mod app;
 mod controller;

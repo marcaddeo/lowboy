@@ -1,6 +1,10 @@
-use crate::{model::Post, view::Home};
 use axum::response::IntoResponse;
-use lowboy::{error::LowboyError, extract::DatabaseConnection, lowboy_view};
+use lowboy::error::LowboyError;
+use lowboy::extract::DatabaseConnection;
+use lowboy::lowboy_view;
+
+use crate::model::Post;
+use crate::view::Home;
 
 #[axum::debug_handler]
 pub async fn home(
