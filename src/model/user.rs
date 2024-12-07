@@ -16,11 +16,34 @@ use crate::Connection;
 
 use super::Model;
 
-#[async_trait::async_trait]
-pub trait FromRecord<T> {
-    async fn from_record(record: &T, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized;
+#[derive(Clone, Debug, Default)]
+pub struct LowboyUser {
+    pub id: i32,
+    pub username: String,
+    pub email: String,
+    pub password: Option<String>,
+    pub access_token: Option<String>,
+}
+
+impl LowboyUser {
+    pub async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Self> {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .first::<Self>(conn)
+            .await
+    }
+
+    pub async fn find_by_username_having_password(
+        username: &str,
+        conn: &mut Connection,
+    ) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .filter(lowboy_user::password.is_not_null())
+            .first::<Self>(conn)
+            .await
+            .optional()
+    }
 }
 
 pub trait LowboyUserTrait<T>: Model + FromRecord<T> {
@@ -40,8 +63,165 @@ pub trait LowboyUserTrait<T>: Model + FromRecord<T> {
     }
 }
 
-// @TODO we need to mask the password and access token again, which requires fixing the macro to
-// allow doing so.
+impl LowboyUserTrait<LowboyUserRecord> for LowboyUser {
+    fn id(&self) -> i32 {
+        self.id
+    }
+
+    fn username(&self) -> &String {
+        &self.username
+    }
+
+    fn email(&self) -> &String {
+        &self.email
+    }
+
+    fn password(&self) -> &Option<String> {
+        &self.password
+    }
+
+    fn access_token(&self) -> &Option<String> {
+        &self.access_token
+    }
+}
+
+#[async_trait::async_trait]
+impl Model for LowboyUser {
+    type Record = LowboyUserRecord;
+
+    type RowSqlType = (lowboy_user::SqlType,);
+
+    type Selection = (AsSelect<LowboyUserRecord, Sqlite>,);
+
+    type Query = Select<lowboy_user::table, Self::Selection>;
+
+    fn query() -> Self::Query {
+        Self::Record::table().select((Self::Record::as_select(),))
+    }
+
+    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
+    where
+        Self: Sized,
+    {
+        Self::query()
+            .filter(lowboy_user::id.eq(id))
+            .first::<Self>(conn)
+            .await
+    }
+}
+
+impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
+    type SqlType = <LowboyUser as Model>::RowSqlType;
+}
+
+impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
+    type Row = (LowboyUserRecord,);
+
+    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
+        let (lowboy_user_record,) = row;
+
+        Ok(Self {
+            id: lowboy_user_record.id,
+            username: lowboy_user_record.username,
+            email: lowboy_user_record.email,
+            password: lowboy_user_record.password,
+            access_token: lowboy_user_record.access_token,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+pub trait FromRecord<T> {
+    async fn from_record(record: &T, conn: &mut Connection) -> QueryResult<Self>
+    where
+        Self: Sized;
+}
+
+#[async_trait::async_trait]
+impl FromRecord<LowboyUserRecord> for LowboyUser {
+    async fn from_record(record: &LowboyUserRecord, _conn: &mut Connection) -> QueryResult<Self>
+    where
+        Self: Sized,
+    {
+        let record = record.clone();
+        Ok(Self {
+            id: record.id,
+            username: record.username,
+            email: record.email,
+            password: record.password,
+            access_token: record.access_token,
+        })
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Operation {
+    Create = 0,
+    Update = 1,
+}
+
+impl From<i64> for Operation {
+    fn from(value: i64) -> Self {
+        match value {
+            0 => Self::Create,
+            1 => Self::Update,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl<'a> CreateLowboyUserRecord<'a> {
+    pub async fn save_or_update(
+        &self,
+        conn: &mut Connection,
+    ) -> QueryResult<(LowboyUserRecord, Operation)> {
+        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+            async move {
+                // @TODO can we do this in one query..?
+                let operation = LowboyUser::query()
+                    .filter(lowboy_user::username.eq(self.username))
+                    .count()
+                    .get_result::<i64>(conn)
+                    .await
+                    .map(Operation::from)?;
+
+                let user: LowboyUserRecord = insert_into(lowboy_user::table)
+                    .values(self)
+                    .on_conflict(lowboy_user::email)
+                    .do_update()
+                    .set(lowboy_user::access_token.eq(excluded(lowboy_user::access_token)))
+                    .get_result(conn)
+                    .await?;
+
+                Ok((user, operation))
+            }
+            .scope_boxed()
+        })
+        .await
+    }
+}
+
+impl AuthUser for LowboyUserRecord {
+    type Id = i32;
+
+    fn id(&self) -> Self::Id {
+        self.id
+    }
+
+    fn session_auth_hash(&self) -> &[u8] {
+        if let Some(access_token) = &self.access_token {
+            return access_token.as_bytes();
+        }
+
+        if let Some(password) = &self.password {
+            return password.as_bytes();
+        }
+
+        &[]
+    }
+}
+
+// @note the rest of this file is to eventually be generated using lowboy_record!
 #[derive(Clone, DebugMasked, Default, Queryable, Selectable, AsChangeset, Identifiable)]
 #[diesel(table_name = crate::schema::lowboy_user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -215,186 +395,5 @@ impl LowboyUser {
 
     pub async fn delete_record(self, conn: &mut Connection) -> QueryResult<usize> {
         LowboyUserRecord::from(self).delete(conn).await
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct LowboyUser {
-    pub id: i32,
-    pub username: String,
-    pub email: String,
-    pub password: Option<String>,
-    pub access_token: Option<String>,
-}
-
-#[async_trait::async_trait]
-impl Model for LowboyUser {
-    type Record = LowboyUserRecord;
-
-    type RowSqlType = (lowboy_user::SqlType,);
-
-    type Selection = (AsSelect<LowboyUserRecord, Sqlite>,);
-
-    type Query = Select<lowboy_user::table, Self::Selection>;
-
-    fn query() -> Self::Query {
-        Self::Record::table().select((Self::Record::as_select(),))
-    }
-
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized,
-    {
-        Self::query()
-            .filter(lowboy_user::id.eq(id))
-            .first::<Self>(conn)
-            .await
-    }
-}
-
-impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
-    type SqlType = <LowboyUser as Model>::RowSqlType;
-}
-
-impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
-    type Row = (LowboyUserRecord,);
-
-    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (lowboy_user_record,) = row;
-
-        Ok(Self {
-            id: lowboy_user_record.id,
-            username: lowboy_user_record.username,
-            email: lowboy_user_record.email,
-            password: lowboy_user_record.password,
-            access_token: lowboy_user_record.access_token,
-        })
-    }
-}
-
-impl LowboyUser {
-    pub async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(lowboy_user::username.eq(username))
-            .first::<Self>(conn)
-            .await
-    }
-
-    pub async fn find_by_username_having_password(
-        username: &str,
-        conn: &mut Connection,
-    ) -> QueryResult<Option<Self>> {
-        Self::query()
-            .filter(lowboy_user::username.eq(username))
-            .filter(lowboy_user::password.is_not_null())
-            .first::<Self>(conn)
-            .await
-            .optional()
-    }
-}
-
-#[async_trait::async_trait]
-impl FromRecord<LowboyUserRecord> for LowboyUser {
-    async fn from_record(record: &LowboyUserRecord, _conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized,
-    {
-        let record = record.clone();
-        Ok(Self {
-            id: record.id,
-            username: record.username,
-            email: record.email,
-            password: record.password,
-            access_token: record.access_token,
-        })
-    }
-}
-
-impl LowboyUserTrait<LowboyUserRecord> for LowboyUser {
-    fn id(&self) -> i32 {
-        self.id
-    }
-
-    fn username(&self) -> &String {
-        &self.username
-    }
-
-    fn email(&self) -> &String {
-        &self.email
-    }
-
-    fn password(&self) -> &Option<String> {
-        &self.password
-    }
-
-    fn access_token(&self) -> &Option<String> {
-        &self.access_token
-    }
-}
-
-#[derive(PartialEq)]
-pub enum Operation {
-    Create = 0,
-    Update = 1,
-}
-
-impl From<i64> for Operation {
-    fn from(value: i64) -> Self {
-        match value {
-            0 => Self::Create,
-            1 => Self::Update,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl<'a> CreateLowboyUserRecord<'a> {
-    pub async fn save_or_update(
-        &self,
-        conn: &mut Connection,
-    ) -> QueryResult<(LowboyUserRecord, Operation)> {
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
-            async move {
-                // @TODO can we do this in one query..?
-                let operation = LowboyUser::query()
-                    .filter(lowboy_user::username.eq(self.username))
-                    .count()
-                    .get_result::<i64>(conn)
-                    .await
-                    .map(Operation::from)?;
-
-                let user: LowboyUserRecord = insert_into(lowboy_user::table)
-                    .values(self)
-                    .on_conflict(lowboy_user::email)
-                    .do_update()
-                    .set(lowboy_user::access_token.eq(excluded(lowboy_user::access_token)))
-                    .get_result(conn)
-                    .await?;
-
-                Ok((user, operation))
-            }
-            .scope_boxed()
-        })
-        .await
-    }
-}
-
-impl AuthUser for LowboyUserRecord {
-    type Id = i32;
-
-    fn id(&self) -> Self::Id {
-        self.id
-    }
-
-    fn session_auth_hash(&self) -> &[u8] {
-        if let Some(access_token) = &self.access_token {
-            return access_token.as_bytes();
-        }
-
-        if let Some(password) = &self.password {
-            return password.as_bytes();
-        }
-
-        &[]
     }
 }

@@ -9,7 +9,85 @@ use lowboy::Connection;
 use crate::model::{User, UserRecord};
 use crate::schema::{lowboy_user, post, user};
 
-/// A `Post` record
+#[derive(Clone, Debug)]
+pub struct Post {
+    pub id: i32,
+    pub user: User,
+    pub content: String,
+}
+
+impl Post {
+    pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
+        Post::query()
+            .limit(limit.unwrap_or(100))
+            .order_by(post::id.desc())
+            .load::<Post>(conn)
+            .await
+    }
+}
+
+#[async_trait::async_trait]
+impl Model for Post {
+    type Record = PostRecord;
+
+    type RowSqlType = (post::SqlType, user::SqlType, lowboy_user::SqlType);
+
+    type Selection = (
+        AsSelect<PostRecord, Sqlite>,
+        AsSelect<UserRecord, Sqlite>,
+        AsSelect<LowboyUserRecord, Sqlite>,
+    );
+
+    type Query =
+        Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
+
+    fn query() -> Self::Query {
+        post::table
+            .inner_join(user::table.inner_join(lowboy_user::table))
+            .select((
+                PostRecord::as_select(),
+                UserRecord::as_select(),
+                LowboyUserRecord::as_select(),
+            ))
+    }
+
+    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        Self::query()
+            .filter(post::id.eq(id))
+            .first::<Post>(conn)
+            .await
+    }
+}
+
+impl CompatibleType<Post, Sqlite> for <Post as Model>::Selection {
+    type SqlType = <Post as Model>::RowSqlType;
+}
+
+impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
+    type Row = (PostRecord, UserRecord, LowboyUserRecord);
+
+    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
+        let (post_record, user_record, lowboy_user_record) = row;
+
+        Ok(Self {
+            id: post_record.id,
+            user: User {
+                id: user_record.id,
+                lowboy_user: LowboyUser {
+                    username: lowboy_user_record.username,
+                    email: lowboy_user_record.email,
+                    ..Default::default()
+                },
+                name: user_record.name,
+                avatar: user_record.avatar,
+                byline: user_record.byline,
+            },
+            content: post_record.content,
+        })
+    }
+}
+
+// @note the rest of this file is to eventually be generated using lowboy_record!
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
 #[diesel(table_name = crate::schema::post)]
 #[diesel(belongs_to(UserRecord, foreign_key = user_id))]
@@ -146,104 +224,5 @@ impl Post {
 
     pub async fn delete_record(self, conn: &mut Connection) -> QueryResult<usize> {
         PostRecord::from(self).delete(conn).await
-    }
-}
-
-/// A `Post` model
-#[derive(Clone, Debug)]
-pub struct Post {
-    pub id: i32,
-    pub user: User,
-    pub content: String,
-}
-
-#[async_trait::async_trait]
-impl Model for Post {
-    type Record = PostRecord;
-
-    type RowSqlType = (post::SqlType, user::SqlType, lowboy_user::SqlType);
-
-    type Selection = (
-        AsSelect<PostRecord, Sqlite>,
-        AsSelect<UserRecord, Sqlite>,
-        AsSelect<LowboyUserRecord, Sqlite>,
-    );
-
-    type Query =
-        Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
-
-    fn query() -> Self::Query {
-        post::table
-            .inner_join(user::table.inner_join(lowboy_user::table))
-            .select((
-                PostRecord::as_select(),
-                UserRecord::as_select(),
-                LowboyUserRecord::as_select(),
-            ))
-    }
-
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(post::id.eq(id))
-            .first::<Post>(conn)
-            .await
-    }
-}
-
-// build_model!(Post, {
-//     let (post_record, user_record, username, email) = row;
-//
-//     Ok(Self {
-//         id: post_record.id,
-//         user: User {
-//             id: user_record.id,
-//             lowboy_user: LowboyUser {
-//                 username,
-//                 email,
-//                 ..Default::default()
-//             },
-//             name: user_record.name,
-//             avatar: user_record.avatar,
-//             byline: user_record.byline,
-//         },
-//         content: post_record.content,
-//     })
-// })
-
-impl CompatibleType<Post, Sqlite> for <Post as Model>::Selection {
-    type SqlType = <Post as Model>::RowSqlType;
-}
-
-impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, UserRecord, LowboyUserRecord);
-
-    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user_record, lowboy_user_record) = row;
-
-        Ok(Self {
-            id: post_record.id,
-            user: User {
-                id: user_record.id,
-                lowboy_user: LowboyUser {
-                    username: lowboy_user_record.username,
-                    email: lowboy_user_record.email,
-                    ..Default::default()
-                },
-                name: user_record.name,
-                avatar: user_record.avatar,
-                byline: user_record.byline,
-            },
-            content: post_record.content,
-        })
-    }
-}
-
-impl Post {
-    pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
-        Post::query()
-            .limit(limit.unwrap_or(100))
-            .order_by(post::id.desc())
-            .load::<Post>(conn)
-            .await
     }
 }
