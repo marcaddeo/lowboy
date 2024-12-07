@@ -1,4 +1,4 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
@@ -210,33 +210,19 @@ pub struct User {
 impl Model for User {
     type Record = UserRecord;
 
-    type RowSqlType = (
-        user::SqlType,
-        SqlTypeOf<lowboy_user::username>,
-        SqlTypeOf<lowboy_user::email>,
-    );
+    type RowSqlType = (user::SqlType, lowboy_user::SqlType);
 
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
-        SqlTypeOf<lowboy_user::username>,
-        SqlTypeOf<lowboy_user::email>,
+        AsSelect<LowboyUserRecord, Sqlite>,
     );
 
-    type Query = Select<
-        InnerJoin<user::table, lowboy_user::table>,
-        (
-            AsSelect<UserRecord, Sqlite>,
-            lowboy_user::username,
-            lowboy_user::email,
-        ),
-    >;
+    type Query = Select<InnerJoin<user::table, lowboy_user::table>, Self::Selection>;
 
     fn query() -> Self::Query {
-        user::table.inner_join(lowboy_user::table).select((
-            UserRecord::as_select(),
-            lowboy_user::username,
-            lowboy_user::email,
-        ))
+        user::table
+            .inner_join(lowboy_user::table)
+            .select((UserRecord::as_select(), LowboyUserRecord::as_select()))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
@@ -255,16 +241,16 @@ impl CompatibleType<User, Sqlite> for <User as Model>::Selection {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (UserRecord, String, String);
+    type Row = (UserRecord, LowboyUserRecord);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, username, email) = row;
+        let (user_record, lowboy_user_record) = row;
 
         Ok(Self {
             id: user_record.id,
             lowboy_user: LowboyUser {
-                username,
-                email,
+                username: lowboy_user_record.username,
+                email: lowboy_user_record.email,
                 ..Default::default()
             },
             name: user_record.name,

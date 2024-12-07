@@ -34,7 +34,7 @@ pub mod error;
 pub mod extract;
 mod mailer;
 pub mod model;
-mod schema;
+pub mod schema;
 pub mod view;
 
 pub use app::App;

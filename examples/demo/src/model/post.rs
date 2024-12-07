@@ -1,9 +1,9 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{LowboyUser, Model};
+use lowboy::model::{LowboyUser, LowboyUserRecord, Model};
 use lowboy::Connection;
 
 use crate::model::{User, UserRecord};
@@ -161,29 +161,16 @@ pub struct Post {
 impl Model for Post {
     type Record = PostRecord;
 
-    type RowSqlType = (
-        post::SqlType,
-        user::SqlType,
-        SqlTypeOf<lowboy_user::username>,
-        SqlTypeOf<lowboy_user::email>,
-    );
+    type RowSqlType = (post::SqlType, user::SqlType, lowboy_user::SqlType);
 
     type Selection = (
         AsSelect<PostRecord, Sqlite>,
         AsSelect<UserRecord, Sqlite>,
-        SqlTypeOf<lowboy_user::username>,
-        SqlTypeOf<lowboy_user::email>,
+        AsSelect<LowboyUserRecord, Sqlite>,
     );
 
-    type Query = Select<
-        InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>,
-        (
-            AsSelect<PostRecord, Sqlite>,
-            AsSelect<UserRecord, Sqlite>,
-            lowboy_user::username,
-            lowboy_user::email,
-        ),
-    >;
+    type Query =
+        Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
 
     fn query() -> Self::Query {
         post::table
@@ -191,8 +178,7 @@ impl Model for Post {
             .select((
                 PostRecord::as_select(),
                 UserRecord::as_select(),
-                lowboy_user::username,
-                lowboy_user::email,
+                LowboyUserRecord::as_select(),
             ))
     }
 
@@ -229,18 +215,18 @@ impl CompatibleType<Post, Sqlite> for <Post as Model>::Selection {
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, UserRecord, String, String);
+    type Row = (PostRecord, UserRecord, LowboyUserRecord);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user_record, username, email) = row;
+        let (post_record, user_record, lowboy_user_record) = row;
 
         Ok(Self {
             id: post_record.id,
             user: User {
                 id: user_record.id,
                 lowboy_user: LowboyUser {
-                    username,
-                    email,
+                    username: lowboy_user_record.username,
+                    email: lowboy_user_record.email,
                     ..Default::default()
                 },
                 name: user_record.name,
