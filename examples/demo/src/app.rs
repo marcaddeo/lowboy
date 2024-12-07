@@ -71,10 +71,13 @@ impl AppContext for DemoContext {
                 }),
             ),
         };
-        User::new_record(record.id, &name)
-            .with_avatar(avatar.as_deref())
-            .create(&mut conn)
-            .await?;
+        let mut record = User::create_record(record.id, &name);
+
+        if let Some(avatar) = avatar.as_deref() {
+            record = record.with_avatar(avatar);
+        }
+
+        record.save(&mut conn).await?;
         Ok(())
     }
 }
