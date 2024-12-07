@@ -5,7 +5,7 @@ use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use lowboy::auth::{LowboyLoginForm, RegistrationDetails};
-use lowboy::model::LowboyUserRecord;
+use lowboy::model::LowboyUser;
 use lowboy::{context, App, AppContext, Connection, Context, Events, LowboyAuth};
 use tokio_cron_scheduler::JobScheduler;
 
@@ -44,7 +44,7 @@ impl AppContext for DemoContext {
 
     async fn on_new_user(
         &self,
-        record: &LowboyUserRecord,
+        record: &LowboyUser,
         details: RegistrationDetails,
     ) -> Result<(), context::Error> {
         let mut conn = self.database.get().await?;

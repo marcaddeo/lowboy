@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{FromRecord, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model};
+use lowboy::model::{FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model};
 use lowboy::Connection;
 
 use crate::schema::{lowboy_user, user};
@@ -91,7 +91,7 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
     }
 }
 
-impl LowboyUserTrait<LowboyUserRecord> for User {
+impl LowboyUserTrait for User {
     fn id(&self) -> i32 {
         self.id
     }
@@ -114,13 +114,13 @@ impl LowboyUserTrait<LowboyUserRecord> for User {
 }
 
 #[async_trait::async_trait]
-impl FromRecord<LowboyUserRecord> for User {
-    async fn from_record(record: &LowboyUserRecord, conn: &mut Connection) -> QueryResult<Self>
+impl FromLowboyUser for User {
+    async fn from_lowboy_user(user: &LowboyUser, conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized,
     {
         Self::query()
-            .filter(user::lowboy_user_id.eq(record.id))
+            .filter(user::lowboy_user_id.eq(user.id))
             .first::<Self>(conn)
             .await
     }

@@ -46,7 +46,7 @@ impl LowboyUser {
     }
 }
 
-pub trait LowboyUserTrait<T>: Model + FromRecord<T> {
+pub trait LowboyUserTrait: Model + FromLowboyUser {
     fn id(&self) -> i32;
     fn username(&self) -> &String;
     fn email(&self) -> &String;
@@ -63,7 +63,7 @@ pub trait LowboyUserTrait<T>: Model + FromRecord<T> {
     }
 }
 
-impl LowboyUserTrait<LowboyUserRecord> for LowboyUser {
+impl LowboyUserTrait for LowboyUser {
     fn id(&self) -> i32 {
         self.id
     }
@@ -131,25 +131,25 @@ impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
 }
 
 #[async_trait::async_trait]
-pub trait FromRecord<T> {
-    async fn from_record(record: &T, conn: &mut Connection) -> QueryResult<Self>
+pub trait FromLowboyUser {
+    async fn from_lowboy_user(user: &LowboyUser, conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized;
 }
 
 #[async_trait::async_trait]
-impl FromRecord<LowboyUserRecord> for LowboyUser {
-    async fn from_record(record: &LowboyUserRecord, _conn: &mut Connection) -> QueryResult<Self>
+impl FromLowboyUser for LowboyUser {
+    async fn from_lowboy_user(user: &LowboyUser, _conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized,
     {
-        let record = record.clone();
+        let user = user.clone();
         Ok(Self {
-            id: record.id,
-            username: record.username,
-            email: record.email,
-            password: record.password,
-            access_token: record.access_token,
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            password: user.password,
+            access_token: user.access_token,
         })
     }
 }
@@ -201,7 +201,7 @@ impl<'a> CreateLowboyUserRecord<'a> {
     }
 }
 
-impl AuthUser for LowboyUserRecord {
+impl AuthUser for LowboyUser {
     type Id = i32;
 
     fn id(&self) -> Self::Id {

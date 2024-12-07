@@ -19,9 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{
-    CredentialKind, Credentials, LowboyUser, LowboyUserRecord, Model as _, Operation,
-};
+use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _, Operation};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -358,7 +356,7 @@ pub struct DiscordUserInfo {
 
 #[async_trait]
 impl AuthnBackend for LowboyAuth {
-    type User = LowboyUserRecord;
+    type User = LowboyUser;
     type Credentials = Credentials;
     type Error = Error;
 
@@ -386,7 +384,7 @@ impl AuthnBackend for LowboyAuth {
                         user.password.as_ref().expect("checked in query"),
                     )
                     .is_ok()
-                    .then_some(user.into()))
+                    .then_some(user))
                 })
                 .await?
             }
@@ -432,10 +430,11 @@ impl AuthnBackend for LowboyAuth {
                     .with_access_token(token.secret())
                     .save_or_update(&mut conn)
                     .await?;
+                let user = LowboyUser::load(record.id, &mut conn).await?;
 
                 if operation == Operation::Create {
                     self.context
-                        .on_new_user(&record, registration_details)
+                        .on_new_user(&user, registration_details)
                         .await
                         .map_err(|e| {
                             Error::AppError(format!(
@@ -444,7 +443,7 @@ impl AuthnBackend for LowboyAuth {
                         })?;
                 }
 
-                Ok(Some(record))
+                Ok(Some(user))
             }
         }
     }
@@ -454,6 +453,6 @@ impl AuthnBackend for LowboyAuth {
         user_id: &axum_login::UserId<Self>,
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
-        Ok(Some(LowboyUser::load(*user_id, &mut conn).await?.into()))
+        Ok(Some(LowboyUser::load(*user_id, &mut conn).await?))
     }
 }
