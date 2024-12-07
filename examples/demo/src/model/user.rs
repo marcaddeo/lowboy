@@ -76,14 +76,11 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         let (user_record, lowboy_user_record) = row;
+        let lowboy_user = LowboyUser::build((lowboy_user_record,))?;
 
         Ok(Self {
             id: user_record.id,
-            lowboy_user: LowboyUser {
-                username: lowboy_user_record.username,
-                email: lowboy_user_record.email,
-                ..Default::default()
-            },
+            lowboy_user,
             name: user_record.name,
             avatar: user_record.avatar,
             byline: user_record.byline,
