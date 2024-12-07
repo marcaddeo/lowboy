@@ -1,5 +1,3 @@
-use crate::model::{User, UserRecord};
-use crate::schema::{lowboy_user, post, user};
 use diesel::dsl::{AsSelect, InnerJoin, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
@@ -7,6 +5,9 @@ use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{LowboyUser, Model};
 use lowboy::Connection;
+
+use crate::model::{User, UserRecord};
+use crate::schema::{lowboy_user, post, user};
 
 /// A `Post` record
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]

@@ -1,7 +1,8 @@
-use crate::Connection;
 use diesel::associations::HasTable;
 use diesel::query_builder::SelectQuery;
 use diesel::QueryResult;
+
+use crate::Connection;
 
 mod credentials;
 mod user;
