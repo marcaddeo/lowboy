@@ -19,13 +19,10 @@ pub async fn create(
     DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> Result<impl IntoResponse, LowboyError> {
-    let new_post = Post::create_record(author.id, &input.message)
+    let record = Post::create_record(author.id, &input.message)
         .save(&mut conn)
         .await?;
-    let mut post = Post::load(new_post.id, &mut conn).await?;
-
-    post.content = "New post content!".to_string();
-    post.update_record().save(&mut conn).await?;
+    let post = Post::load(record.id, &mut conn).await?;
 
     let form = view::PostForm {};
     let post = view::Post { post };
