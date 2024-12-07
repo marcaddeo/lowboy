@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use validator::Validate;
 
 use crate::model::{
-    CredentialKind, Credentials, LowboyUser, LowboyUserRecord, NewLowboyUserRecord, Operation,
+    CredentialKind, Credentials, LowboyUser, LowboyUserRecord, Model as _, Operation,
 };
 use crate::view::LowboyView;
 use crate::AppContext;
@@ -428,13 +428,10 @@ impl AuthnBackend for LowboyAuth {
                 };
 
                 // Persist user in our database so we can use `get_user`.
-                let new_user = NewLowboyUserRecord {
-                    username,
-                    email,
-                    password: None,
-                    access_token: Some(token.secret()),
-                };
-                let (record, operation) = new_user.create_or_update(&mut conn).await?;
+                let (record, operation) = LowboyUser::create_record(username, email)
+                    .with_access_token(token.secret())
+                    .save_or_update(&mut conn)
+                    .await?;
 
                 if operation == Operation::Create {
                     self.context
@@ -457,6 +454,6 @@ impl AuthnBackend for LowboyAuth {
         user_id: &axum_login::UserId<Self>,
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
-        Ok(Some(LowboyUser::find(*user_id, &mut conn).await?.into()))
+        Ok(Some(LowboyUser::load(*user_id, &mut conn).await?.into()))
     }
 }
