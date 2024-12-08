@@ -5,6 +5,8 @@ use diesel::QueryResult;
 use crate::Connection;
 
 mod credentials;
+mod email;
+mod token;
 mod user;
 
 pub use credentials::*;
