@@ -5,12 +5,12 @@ use crate::auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationFo
 use crate::context::CloneableAppContext;
 use crate::controller;
 use crate::error::{LowboyError, LowboyErrorView};
-use crate::model::{LowboyUserRecord, LowboyUserTrait};
+use crate::model::LowboyUserTrait;
 use crate::view::LowboyLayout;
 
 #[allow(unused_variables)]
 pub trait App<AC: CloneableAppContext>: Send + 'static {
-    type User: LowboyUserTrait<LowboyUserRecord>;
+    type User: LowboyUserTrait;
     type Layout: LowboyLayout<Self::User>;
     type ErrorView: LowboyErrorView;
     type RegistrationForm: RegistrationForm

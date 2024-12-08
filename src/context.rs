@@ -14,7 +14,7 @@ use tokio_cron_scheduler::JobScheduler;
 
 use crate::auth::RegistrationDetails;
 use crate::config::Config;
-use crate::model::LowboyUserRecord;
+use crate::model::LowboyUser;
 use crate::{Connection, Events};
 
 type Result<T> = std::result::Result<T, Error>;
@@ -80,11 +80,7 @@ pub trait AppContext: Context + DynClone {
     where
         Self: Sized;
 
-    async fn on_new_user(
-        &self,
-        record: &LowboyUserRecord,
-        details: RegistrationDetails,
-    ) -> Result<()> {
+    async fn on_new_user(&self, user: &LowboyUser, details: RegistrationDetails) -> Result<()> {
         Ok(())
     }
 }

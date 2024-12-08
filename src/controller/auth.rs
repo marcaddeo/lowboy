@@ -18,7 +18,7 @@ use crate::auth::{
 use crate::context::CloneableAppContext;
 use crate::error::LowboyError;
 use crate::model::{
-    CredentialKind, Credentials, NewLowboyUserRecord, OAuthCredentials, Operation,
+    CredentialKind, Credentials, LowboyUser, Model as _, OAuthCredentials, Operation,
     PasswordCredentials,
 };
 use crate::{app, lowboy_view, AuthSession};
@@ -118,9 +118,10 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     let mut conn = context.database().get().await?;
 
     let password = password_auth::generate_hash(input.password());
-    let new_user =
-        NewLowboyUserRecord::new(input.username(), input.email()).with_password(Some(&password));
-    let res = new_user.create_or_update(&mut conn).await;
+    let res = LowboyUser::create_record(input.username(), input.email())
+        .with_password(&password)
+        .save_or_update(&mut conn)
+        .await;
 
     match res {
         Ok(_) => messages.success("Registration successful! You can now log in."),
@@ -131,6 +132,7 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     };
 
     Ok(if let Ok((user, Operation::Create)) = res {
+        let user = LowboyUser::load(user.id, &mut conn).await?;
         context
             .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
             .await?;

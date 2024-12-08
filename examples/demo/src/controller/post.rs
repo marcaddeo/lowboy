@@ -2,6 +2,7 @@ use axum::extract::Form;
 use axum::response::IntoResponse;
 use lowboy::error::LowboyError;
 use lowboy::extract::{DatabaseConnection, EnsureAppUser};
+use lowboy::model::Model as _;
 use serde::Deserialize;
 
 use crate::app::{Demo, DemoContext};
@@ -18,9 +19,10 @@ pub async fn create(
     DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> Result<impl IntoResponse, LowboyError> {
-    let new_post = Post::new_record(author.id, &input.message);
-    let record = new_post.create(&mut conn).await?;
-    let post = Post::from_record(&record, &mut conn).await?;
+    let record = Post::create_record(author.id, &input.message)
+        .save(&mut conn)
+        .await?;
+    let post = Post::load(record.id, &mut conn).await?;
 
     let form = view::PostForm {};
     let post = view::Post { post };

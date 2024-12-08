@@ -10,7 +10,7 @@ use dyn_clone::DynClone;
 use crate::auth::AuthSession;
 use crate::context::CloneableAppContext;
 use crate::error::{ErrorWrapper, LowboyError, LowboyErrorView};
-use crate::model::{FromRecord as _, LowboyUserRecord, LowboyUserTrait};
+use crate::model::{FromLowboyUser as _, LowboyUserTrait};
 use crate::{app, lowboy_view};
 
 pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
@@ -66,10 +66,10 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     if let Some(ViewBox(view)) = response.extensions().get::<ViewBox>() {
         let mut conn = context.database().get().await?;
         let user = if let Some(AuthSession {
-            user: Some(record), ..
+            user: Some(user), ..
         }) = auth_session
         {
-            Some(App::User::from_record(&record, &mut conn).await?)
+            Some(App::User::from_lowboy_user(&user, &mut conn).await?)
         } else {
             None
         };
@@ -105,7 +105,7 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
     }
 }
 
-pub trait LowboyLayout<T: LowboyUserTrait<LowboyUserRecord>>: ToString + Default {
+pub trait LowboyLayout<T: LowboyUserTrait>: ToString + Default {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self;
     fn set_content(&mut self, content: impl LowboyView) -> &mut Self;
     fn set_context(&mut self, context: LayoutContext) -> &mut Self;
