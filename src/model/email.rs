@@ -2,6 +2,7 @@ use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
+use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
 
 use crate::model::{LowboyUserRecord, Model};
@@ -16,6 +17,40 @@ pub struct Email {
     pub verified: bool,
 }
 
+impl Email {
+    pub async fn find_by_user_id(user_id: i32, conn: &mut Connection) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(email::user_id.eq(user_id))
+            .first(conn)
+            .await
+            .optional()
+    }
+
+    pub async fn find_by_address(
+        address: &str,
+        conn: &mut Connection,
+    ) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(email::address.eq(address))
+            .first(conn)
+            .await
+            .optional()
+    }
+
+    pub async fn find_by_address_having_verification(
+        address: &str,
+        verified: bool,
+        conn: &mut Connection,
+    ) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(email::address.eq(address))
+            .filter(email::verified.eq(verified))
+            .first(conn)
+            .await
+            .optional()
+    }
+}
+
 #[async_trait::async_trait]
 impl Model for Email {
     type Record = EmailRecord;
@@ -28,10 +63,7 @@ impl Model for Email {
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(email::id.eq(id))
-            .first::<Self>(conn)
-            .await
+        Self::query().filter(email::id.eq(id)).first(conn).await
     }
 }
 
@@ -54,6 +86,17 @@ impl Queryable<<Email as Model>::RowSqlType, Sqlite> for Email {
     }
 }
 
+impl From<EmailRecord> for Email {
+    fn from(value: EmailRecord) -> Self {
+        Self {
+            id: value.id,
+            user_id: value.user_id,
+            address: value.address,
+            verified: value.verified,
+        }
+    }
+}
+
 // @note the rest of this file is to eventually be generated using lowboy_record!
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
 #[diesel(table_name = crate::schema::email)]
@@ -67,8 +110,8 @@ pub struct EmailRecord {
 }
 
 impl EmailRecord {
-    pub fn create(user_id: i32, content: &str) -> CreateEmailRecord<'_> {
-        CreateEmailRecord::new(user_id, content)
+    pub fn create(user_id: i32, address: &str) -> CreateEmailRecord<'_> {
+        CreateEmailRecord::new(user_id, address)
     }
 
     pub async fn read(id: i32, conn: &mut Connection) -> QueryResult<EmailRecord> {
@@ -104,17 +147,12 @@ impl From<Email> for EmailRecord {
 pub struct CreateEmailRecord<'a> {
     pub user_id: i32,
     pub address: &'a str,
-    pub verified: bool,
 }
 
 impl<'a> CreateEmailRecord<'a> {
     /// Create a new `NewEmailRecord` object
     pub fn new(user_id: i32, address: &'a str) -> CreateEmailRecord<'a> {
-        Self {
-            user_id,
-            address,
-            verified: false,
-        }
+        Self { user_id, address }
     }
 
     /// Create a new `post` in the database
@@ -130,13 +168,12 @@ impl<'a> CreateEmailRecord<'a> {
 #[derive(Debug, Default, Identifiable, AsChangeset)]
 #[diesel(table_name = crate::schema::email)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct UpdateEmailRecord<'a> {
+pub struct UpdateEmailRecord {
     pub id: i32,
-    pub address: Option<&'a str>,
     pub verified: Option<bool>,
 }
 
-impl<'a> UpdateEmailRecord<'a> {
+impl UpdateEmailRecord {
     pub fn new(id: i32) -> Self {
         Self {
             id,
@@ -144,26 +181,17 @@ impl<'a> UpdateEmailRecord<'a> {
         }
     }
 
-    pub fn from_email(email: &'a Email) -> Self {
+    pub fn from_email(email: &Email) -> Self {
         Self {
             id: email.id,
-            address: Some(&email.address),
             verified: Some(email.verified),
         }
     }
 
-    pub fn from_record(record: &'a EmailRecord) -> Self {
+    pub fn from_record(record: &EmailRecord) -> Self {
         Self {
             id: record.id,
-            address: Some(&record.address),
             verified: Some(record.verified),
-        }
-    }
-
-    pub fn with_address(self, address: &'a str) -> Self {
-        Self {
-            address: Some(address),
-            ..self
         }
     }
 
@@ -184,8 +212,8 @@ impl<'a> UpdateEmailRecord<'a> {
 }
 
 impl Email {
-    pub fn create_record(user_id: i32, content: &str) -> CreateEmailRecord {
-        CreateEmailRecord::new(user_id, content)
+    pub fn create_record(user_id: i32, address: &str) -> CreateEmailRecord {
+        CreateEmailRecord::new(user_id, address)
     }
 
     pub async fn read_record(id: i32, conn: &mut Connection) -> QueryResult<EmailRecord> {
