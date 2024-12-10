@@ -17,9 +17,10 @@ use crate::auth::{
 };
 use crate::context::CloneableAppContext;
 use crate::error::LowboyError;
+use crate::extract::DatabaseConnection;
 use crate::model::{
     CredentialKind, Credentials, LowboyUser, Model as _, OAuthCredentials, Operation,
-    PasswordCredentials,
+    PasswordCredentials, UnverifiedEmail,
 };
 use crate::{app, lowboy_view, AuthSession};
 
@@ -41,6 +42,7 @@ pub fn routes<App: app::App<AC>, AC: CloneableAppContext>() -> Router<AC> {
             get(oauth_authenticate),
         )
         .route("/logout", get(logout))
+        .route("/email/:address/verify/:token", get(verify_email))
 }
 
 #[derive(Debug, Deserialize)]
@@ -338,4 +340,26 @@ pub async fn logout(mut session: AuthSession) -> Result<impl IntoResponse, Lowbo
         Ok(_) => Ok(Redirect::to("/").into_response()),
         Err(e) => Err(anyhow!("Error logging out user: {e}"))?,
     }
+}
+
+// @todo support ?next
+pub async fn verify_email(
+    DatabaseConnection(mut conn): DatabaseConnection,
+    Path((address, token)): Path<(String, String)>,
+) -> Result<impl IntoResponse, LowboyError> {
+    let Some(email) = UnverifiedEmail::find_by_address(&address, &mut conn).await? else {
+        // @note this message is a potential attack surface for idnetifying registered user emails
+        // error: could not find that address in our system
+        return Ok("".into_response());
+    };
+
+    if email.token.verify(&token) {
+        email.verify(&mut conn).await?;
+        // success: your email has been verified, you may now log in
+        return Ok(Redirect::to("/login").into_response());
+    }
+
+    // @note may want to consider only showing the resend link if the
+    // error: invalid token, present a resend verification email link
+    todo!()
 }

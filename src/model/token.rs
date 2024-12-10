@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
@@ -17,6 +17,12 @@ pub struct Token {
     pub expiration: DateTime<Utc>,
 }
 
+impl Token {
+    pub fn verify(&self, token: &str) -> bool {
+        false
+    }
+}
+
 #[async_trait::async_trait]
 impl Model for Token {
     type Record = TokenRecord;
@@ -29,6 +35,7 @@ impl Model for Token {
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        // @TODO should this only load tokens that aren't expired?
         Self::query()
             .filter(token::id.eq(id))
             .first::<Self>(conn)
@@ -95,6 +102,17 @@ impl From<Token> for TokenRecord {
     }
 }
 
+impl From<TokenRecord> for Token {
+    fn from(value: TokenRecord) -> Self {
+        Self {
+            id: value.id,
+            user_id: value.user_id,
+            secret: value.secret,
+            expiration: value.expiration,
+        }
+    }
+}
+
 #[derive(Debug, Default, Insertable)]
 #[diesel(table_name = crate::schema::token)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
@@ -115,7 +133,7 @@ impl<'a> CreateTokenRecord<'a> {
     }
 
     /// Create a new `post` in the database
-    pub async fn save(&self, conn: &mut Connection) -> QueryResult<TokenRecord> {
+    pub async fn save(self, conn: &mut Connection) -> QueryResult<TokenRecord> {
         diesel::insert_into(crate::schema::token::table)
             .values(self)
             .returning(crate::schema::token::table::all_columns())
