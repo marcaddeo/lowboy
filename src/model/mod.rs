@@ -7,9 +7,13 @@ use crate::Connection;
 mod credentials;
 mod email;
 mod token;
+pub mod unverified_email;
 mod user;
 
 pub use credentials::*;
+pub use email::*;
+pub use token::*;
+pub use unverified_email::*;
 pub use user::*;
 
 #[async_trait::async_trait]

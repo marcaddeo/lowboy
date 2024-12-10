@@ -127,6 +127,11 @@ pub trait LowboyRegisterView<T: RegistrationForm + Default>: LowboyView + Clone 
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 
+pub trait LowboyEmailVerificationView: LowboyView + Clone + Default {
+    fn set_error(self, error: crate::model::unverified_email::Error) -> Self;
+    fn set_resend_verification_link(self, link: String) -> Self;
+}
+
 #[typetag::serde(tag = "LoginForm")]
 pub trait LoginForm: Validate + Send + Sync + DynClone + mopa::Any {
     fn empty() -> Self

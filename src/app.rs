@@ -1,7 +1,9 @@
 use axum::Router;
 use serde::{Deserialize, Serialize};
 
-use crate::auth::{LoginForm, LowboyLoginView, LowboyRegisterView, RegistrationForm};
+use crate::auth::{
+    LoginForm, LowboyEmailVerificationView, LowboyLoginView, LowboyRegisterView, RegistrationForm,
+};
 use crate::context::CloneableAppContext;
 use crate::controller;
 use crate::error::{LowboyError, LowboyErrorView};
@@ -19,6 +21,7 @@ pub trait App<AC: CloneableAppContext>: Send + 'static {
         + Serialize
         + for<'de> Deserialize<'de>;
     type RegisterView: LowboyRegisterView<Self::RegistrationForm>;
+    type EmailVerificationView: LowboyEmailVerificationView;
     type LoginForm: LoginForm + Clone + Default + Serialize + for<'de> Deserialize<'de>;
     type LoginView: LowboyLoginView<Self::LoginForm>;
 
@@ -34,6 +37,10 @@ pub trait App<AC: CloneableAppContext>: Send + 'static {
 
     fn register_view(context: &AC) -> Self::RegisterView {
         Self::RegisterView::default()
+    }
+
+    fn email_verification_view(context: &AC) -> Self::EmailVerificationView {
+        Self::EmailVerificationView::default()
     }
 
     fn login_view(context: &AC) -> Self::LoginView {

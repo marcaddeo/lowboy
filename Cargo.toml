@@ -18,6 +18,7 @@ axum-messages = "0.7.0"
 base64 = "0.22.1"
 chrono = "0.4.38"
 confique = { version = "0.3.0", features = ["yaml"] }
+constant_time_eq = "0.3.1"
 deadpool = "0.12.1"
 deadpool-diesel = { version = "0.6.1", features = [
     "sqlite",
@@ -63,6 +64,7 @@ tower-sessions-core = { version = "0.13.0", features = ["deletion-task"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 typetag = "0.2.18"
+uuid = { version = "1.11.0", features = ["v4"] }
 validator = { version = "0.19.0", features = ["derive"] }
 xdg = "2.5.2"
 
