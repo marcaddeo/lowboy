@@ -175,7 +175,7 @@ impl<'a> CreateLowboyUserRecord<'a> {
         &self,
         conn: &mut Connection,
     ) -> QueryResult<(LowboyUserRecord, Operation)> {
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
+        conn.transaction(|conn| {
             async move {
                 // @TODO can we do this in one query..?
                 let operation = LowboyUser::query()
