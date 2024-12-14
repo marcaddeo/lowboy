@@ -5,8 +5,9 @@ use rinja::Template;
 
 use crate::model::DemoUser;
 
-#[derive(Template, Default)]
+#[derive(Template)]
 #[template(path = "layout.html")]
+#[derive_where::derive_where(Default)]
 pub struct Layout<T: LowboyUserTrait + DemoUser> {
     pub messages: Vec<Message>,
     pub content: String,
@@ -14,7 +15,7 @@ pub struct Layout<T: LowboyUserTrait + DemoUser> {
     pub context: LayoutContext,
 }
 
-impl<T: LowboyUserTrait + Default + DemoUser> LowboyLayout<T> for Layout<T> {
+impl<T: LowboyUserTrait + DemoUser> LowboyLayout<T> for Layout<T> {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self {
         self.messages = messages;
         self

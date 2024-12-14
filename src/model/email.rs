@@ -1,3 +1,4 @@
+use derive_more::derive::Display;
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
@@ -9,7 +10,10 @@ use crate::model::{LowboyUserRecord, Model};
 use crate::schema::email;
 use crate::Connection;
 
-#[derive(Clone, Debug)]
+use super::UnverifiedEmail;
+
+#[derive(Clone, Debug, Display)]
+#[display("{address}")]
 pub struct Email {
     pub id: i32,
     pub user_id: i32,
@@ -93,6 +97,17 @@ impl From<EmailRecord> for Email {
             user_id: value.user_id,
             address: value.address,
             verified: value.verified,
+        }
+    }
+}
+
+impl From<UnverifiedEmail> for Email {
+    fn from(value: UnverifiedEmail) -> Self {
+        Self {
+            id: value.id,
+            user_id: value.user_id,
+            address: value.address,
+            verified: false,
         }
     }
 }

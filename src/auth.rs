@@ -19,7 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _, Operation};
+use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -430,14 +430,27 @@ impl AuthnBackend for LowboyAuth {
                     RegistrationDetails::Local(_) => unreachable!(),
                 };
 
-                // Persist user in our database so we can use `get_user`.
-                let (record, operation) = LowboyUser::create_record(username, email)
-                    .with_access_token(token.secret())
-                    .save_or_update(&mut conn)
-                    .await?;
-                let user = LowboyUser::load(record.id, &mut conn).await?;
+                let access_token = token.secret();
+                let user = if let Some(mut user) =
+                    LowboyUser::find_by_username(username, &mut conn).await?
+                {
+                    // @note this caused some pain trying to figure out why i can't log back in
+                    // after logging out. we're returning the user model with the old token. leaving
+                    // this commented out here to figure out a better design later (never?? :D)
+                    // user.update_record()
+                    //     .with_access_token(access_token)
+                    //     .save(&mut conn)
+                    //     .await?;
+                    // user
 
-                if operation == Operation::Create {
+                    user.access_token = Some(access_token.to_owned());
+                    user.update_record().save(&mut conn).await?;
+                    user
+                } else {
+                    let user =
+                        LowboyUser::new(username, email, None, Some(access_token), &mut conn)
+                            .await?;
+
                     self.context
                         .on_new_user(&user, registration_details)
                         .await
@@ -446,7 +459,9 @@ impl AuthnBackend for LowboyAuth {
                                 "there was an error executing on_new_user: {e}"
                             ))
                         })?;
-                }
+
+                    user
+                };
 
                 Ok(Some(user))
             }

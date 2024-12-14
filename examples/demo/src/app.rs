@@ -12,7 +12,7 @@ use tokio_cron_scheduler::JobScheduler;
 use crate::controller;
 use crate::form::RegisterForm;
 use crate::model::User;
-use crate::view::auth::{Login, Register};
+use crate::view::auth::{EmailVerification, Login, Register};
 use crate::view::{self, Layout};
 
 #[derive(Clone)]
@@ -106,6 +106,7 @@ impl App<DemoContext> for Demo {
     type Layout = Layout<Self::User>;
     type ErrorView = view::Error;
     type RegisterView = Register<Self::RegistrationForm>;
+    type EmailVerificationView = EmailVerification;
     type LoginView = Login<Self::LoginForm>;
     type User = User;
     type RegistrationForm = RegisterForm;
