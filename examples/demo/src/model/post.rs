@@ -68,7 +68,7 @@ impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         let (post_record, user_record, lowboy_user_record) = row;
-        let user = User::build((user_record, lowboy_user_record))?;
+        let user = User::build((user_record, lowboy_user_record, String::new()))?;
 
         Ok(Self {
             id: post_record.id,

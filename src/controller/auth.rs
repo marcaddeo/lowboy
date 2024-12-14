@@ -21,7 +21,7 @@ use crate::error::LowboyError;
 use crate::extract::DatabaseConnection;
 use crate::model::{
     unverified_email::Error as VerificationError, CredentialKind, Credentials, LowboyUser,
-    Model as _, OAuthCredentials, Operation, PasswordCredentials, UnverifiedEmail,
+    OAuthCredentials, PasswordCredentials, UnverifiedEmail,
 };
 use crate::{app, lowboy_view, AuthSession};
 
@@ -124,36 +124,41 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     let mut conn = context.database().get().await?;
 
     let password = password_auth::generate_hash(input.password());
-    let res = LowboyUser::create_record(input.username(), input.email())
-        .with_password(&password)
-        .save_or_update(&mut conn)
-        .await;
+    let user = LowboyUser::new(
+        input.username(),
+        input.email(),
+        Some(&password),
+        None,
+        &mut conn,
+    )
+    .await;
 
-    match res {
-        Ok(_) => messages.success("Registration successful! You can now log in."),
+    match user {
+        Ok(user) => {
+            messages.success("Registration successful! You can now log in.");
+
+            context
+                .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
+                .await?;
+
+            let redirect = Redirect::to(&input.next().to_owned().unwrap_or("/login".into()));
+
+            return Ok(redirect.into_response());
+        }
         Err(DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
             messages.error("A user with the same username or email already exists")
         }
         Err(_) => messages.error("An unknown error occurred"),
     };
 
-    Ok(if let Ok((user, Operation::Create)) = res {
-        let user = LowboyUser::load(user.id, &mut conn).await?;
-        context
-            .on_new_user(&user, RegistrationDetails::Local(Box::new(input.clone())))
-            .await?;
-
-        Redirect::to(&input.next().to_owned().unwrap_or("/login".into()))
+    session.insert(REGISTRATION_FORM_KEY, input.clone()).await?;
+    let redirect = if let Some(next) = input.next().to_owned() {
+        Redirect::to(&format!("/register?next={next}"))
     } else {
-        session.insert(REGISTRATION_FORM_KEY, input.clone()).await?;
+        Redirect::to("/register")
+    };
 
-        if let Some(next) = input.next().to_owned() {
-            Redirect::to(&format!("/register?next={next}"))
-        } else {
-            Redirect::to("/register")
-        }
-    }
-    .into_response())
+    Ok(redirect.into_response())
 }
 
 pub async fn login_form<App: app::App<AC>, AC: CloneableAppContext>(

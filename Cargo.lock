@@ -591,6 +591,7 @@ dependencies = [
  "deadpool",
  "deadpool-diesel",
  "derive-masked",
+ "derive-where",
  "derive_more",
  "diesel",
  "diesel-async",
@@ -639,6 +640,17 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca11c5b0a90dfc0a85824ddb2816881b396d8bec52d1cf42d2321c38a8d404a"
 dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "derive-where"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+dependencies = [
+ "proc-macro2",
  "quote",
  "syn",
 ]

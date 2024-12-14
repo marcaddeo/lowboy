@@ -2,6 +2,15 @@
 pub use lowboy::schema::lowboy_user;
 
 diesel::table! {
+    email (id) {
+        id -> Integer,
+        user_id -> Integer,
+        address -> Text,
+        verified -> Bool,
+    }
+}
+
+diesel::table! {
     post (id) {
         id -> Integer,
         user_id -> Integer,
@@ -29,5 +38,6 @@ diesel::table! {
 
 diesel::joinable!(post -> user (user_id));
 diesel::joinable!(user -> lowboy_user (lowboy_user_id));
+diesel::joinable!(email -> lowboy_user (user_id));
 
-diesel::allow_tables_to_appear_in_same_query!(lowboy_user, post, tower_sessions, user,);
+diesel::allow_tables_to_appear_in_same_query!(lowboy_user, email, post, tower_sessions, user,);

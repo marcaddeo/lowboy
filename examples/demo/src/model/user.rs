@@ -1,14 +1,16 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use diesel::dsl::{AsSelect, InnerJoin, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model};
+use lowboy::model::{
+    Email, EmailRecord, FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model,
+};
 use lowboy::Connection;
 
-use crate::schema::{lowboy_user, user};
+use crate::schema::{email, lowboy_user, user};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct User {
     pub id: i32,
     pub lowboy_user: LowboyUser,
@@ -41,19 +43,35 @@ impl DemoUser for User {
 impl Model for User {
     type Record = UserRecord;
 
-    type RowSqlType = (user::SqlType, lowboy_user::SqlType);
+    type RowSqlType = (
+        user::SqlType,
+        lowboy_user::SqlType,
+        SqlTypeOf<email::address>,
+    );
 
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
         AsSelect<LowboyUserRecord, Sqlite>,
+        SqlTypeOf<email::address>,
     );
 
-    type Query = Select<InnerJoin<user::table, lowboy_user::table>, Self::Selection>;
+    type Query = Select<
+        InnerJoin<user::table, InnerJoin<lowboy_user::table, email::table>>,
+        (
+            AsSelect<UserRecord, Sqlite>,
+            AsSelect<LowboyUserRecord, Sqlite>,
+            email::address,
+        ),
+    >;
 
     fn query() -> Self::Query {
         user::table
-            .inner_join(lowboy_user::table)
-            .select((UserRecord::as_select(), LowboyUserRecord::as_select()))
+            .inner_join(lowboy_user::table.inner_join(email::table))
+            .select((
+                UserRecord::as_select(),
+                LowboyUserRecord::as_select(),
+                email::address,
+            ))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
@@ -72,11 +90,19 @@ impl CompatibleType<User, Sqlite> for <User as Model>::Selection {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (UserRecord, LowboyUserRecord);
+    type Row = (UserRecord, LowboyUserRecord, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, lowboy_user_record) = row;
-        let lowboy_user = LowboyUser::build((lowboy_user_record,))?;
+        let (user_record, lowboy_user_record, email) = row;
+        let lowboy_user = LowboyUser::build((
+            lowboy_user_record.clone(),
+            EmailRecord {
+                address: email,
+                id: 0,
+                user_id: lowboy_user_record.id,
+                verified: false,
+            },
+        ))?;
 
         Ok(Self {
             id: user_record.id,
@@ -97,16 +123,16 @@ impl LowboyUserTrait for User {
         &self.lowboy_user.username
     }
 
-    fn email(&self) -> &String {
+    fn email(&self) -> &Email {
         &self.lowboy_user.email
     }
 
-    fn password(&self) -> &Option<String> {
-        &self.lowboy_user.password
+    fn password(&self) -> Option<&String> {
+        self.lowboy_user.password.as_ref()
     }
 
-    fn access_token(&self) -> &Option<String> {
-        &self.lowboy_user.access_token
+    fn access_token(&self) -> Option<&String> {
+        self.lowboy_user.access_token.as_ref()
     }
 }
 

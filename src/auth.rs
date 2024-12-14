@@ -19,7 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _, Operation};
+use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -430,23 +430,31 @@ impl AuthnBackend for LowboyAuth {
                     RegistrationDetails::Local(_) => unreachable!(),
                 };
 
-                // Persist user in our database so we can use `get_user`.
-                let (record, operation) = LowboyUser::create_record(username, email)
-                    .with_access_token(token.secret())
-                    .save_or_update(&mut conn)
-                    .await?;
-                let user = LowboyUser::load(record.id, &mut conn).await?;
+                let access_token = token.secret();
+                let user =
+                    if let Some(user) = LowboyUser::find_by_username(username, &mut conn).await? {
+                        tracing::info!("{user:?}");
+                        user.update_record()
+                            .with_access_token(access_token)
+                            .save(&mut conn)
+                            .await?;
+                        user
+                    } else {
+                        let user =
+                            LowboyUser::new(username, email, None, Some(access_token), &mut conn)
+                                .await?;
 
-                if operation == Operation::Create {
-                    self.context
-                        .on_new_user(&user, registration_details)
-                        .await
-                        .map_err(|e| {
-                            Error::AppError(format!(
-                                "there was an error executing on_new_user: {e}"
-                            ))
-                        })?;
-                }
+                        self.context
+                            .on_new_user(&user, registration_details)
+                            .await
+                            .map_err(|e| {
+                                Error::AppError(format!(
+                                    "there was an error executing on_new_user: {e}"
+                                ))
+                            })?;
+
+                        user
+                    };
 
                 Ok(Some(user))
             }
