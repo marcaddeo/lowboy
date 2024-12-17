@@ -51,19 +51,14 @@ impl Model for User {
         AsSelect<EmailRecord, Sqlite>,
     );
 
-    type Query = Select<
-        InnerJoin<user::table, InnerJoin<lowboy_user::table, email::table>>,
-        Self::Selection,
-    >;
+    type Query = Select<InnerJoin<<LowboyUser as Model>::Query, user::table>, Self::Selection>;
 
     fn query() -> Self::Query {
-        user::table
-            .inner_join(lowboy_user::table.inner_join(email::table))
-            .select((
-                UserRecord::as_select(),
-                LowboyUserRecord::as_select(),
-                EmailRecord::as_select(),
-            ))
+        LowboyUser::query().inner_join(user::table).select((
+            UserRecord::as_select(),
+            LowboyUserRecord::as_select(),
+            EmailRecord::as_select(),
+        ))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
