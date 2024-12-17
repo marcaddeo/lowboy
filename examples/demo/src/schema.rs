@@ -11,14 +11,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    tower_sessions (id) {
-        id -> Text,
-        data -> Binary,
-        expiry_date -> Integer,
-    }
-}
-
-diesel::table! {
     user (id) {
         id -> Integer,
         lowboy_user_id -> Integer,
@@ -32,4 +24,4 @@ diesel::joinable!(post -> user (user_id));
 diesel::joinable!(user -> lowboy_user (lowboy_user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(user, email);
-diesel::allow_tables_to_appear_in_same_query!(lowboy_user, post, tower_sessions, user,);
+diesel::allow_tables_to_appear_in_same_query!(lowboy_user, user, post);
