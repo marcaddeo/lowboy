@@ -1,4 +1,4 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
@@ -43,25 +43,17 @@ impl DemoUser for User {
 impl Model for User {
     type Record = UserRecord;
 
-    type RowSqlType = (
-        user::SqlType,
-        lowboy_user::SqlType,
-        SqlTypeOf<email::address>,
-    );
+    type RowSqlType = (user::SqlType, lowboy_user::SqlType, email::SqlType);
 
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
         AsSelect<LowboyUserRecord, Sqlite>,
-        SqlTypeOf<email::address>,
+        AsSelect<EmailRecord, Sqlite>,
     );
 
     type Query = Select<
         InnerJoin<user::table, InnerJoin<lowboy_user::table, email::table>>,
-        (
-            AsSelect<UserRecord, Sqlite>,
-            AsSelect<LowboyUserRecord, Sqlite>,
-            email::address,
-        ),
+        Self::Selection,
     >;
 
     fn query() -> Self::Query {
@@ -70,7 +62,7 @@ impl Model for User {
             .select((
                 UserRecord::as_select(),
                 LowboyUserRecord::as_select(),
-                email::address,
+                EmailRecord::as_select(),
             ))
     }
 
@@ -90,19 +82,11 @@ impl CompatibleType<User, Sqlite> for <User as Model>::Selection {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (UserRecord, LowboyUserRecord, String);
+    type Row = (UserRecord, LowboyUserRecord, EmailRecord);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, lowboy_user_record, email) = row;
-        let lowboy_user = LowboyUser::build((
-            lowboy_user_record.clone(),
-            EmailRecord {
-                address: email,
-                id: 0,
-                user_id: lowboy_user_record.id,
-                verified: false,
-            },
-        ))?;
+        let (user_record, lowboy_user_record, email_record) = row;
+        let lowboy_user = LowboyUser::build((lowboy_user_record.clone(), email_record))?;
 
         Ok(Self {
             id: user_record.id,
