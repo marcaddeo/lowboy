@@ -431,30 +431,37 @@ impl AuthnBackend for LowboyAuth {
                 };
 
                 let access_token = token.secret();
-                let user =
-                    if let Some(user) = LowboyUser::find_by_username(username, &mut conn).await? {
-                        tracing::info!("{user:?}");
-                        user.update_record()
-                            .with_access_token(access_token)
-                            .save(&mut conn)
+                let user = if let Some(mut user) =
+                    LowboyUser::find_by_username(username, &mut conn).await?
+                {
+                    // @note this caused some pain trying to figure out why i can't log back in
+                    // after logging out. we're returning the user model with the old token. leaving
+                    // this commented out here to figure out a better design later (never?? :D)
+                    // user.update_record()
+                    //     .with_access_token(access_token)
+                    //     .save(&mut conn)
+                    //     .await?;
+                    // user
+
+                    user.access_token = Some(access_token.to_owned());
+                    user.update_record().save(&mut conn).await?;
+                    user
+                } else {
+                    let user =
+                        LowboyUser::new(username, email, None, Some(access_token), &mut conn)
                             .await?;
-                        user
-                    } else {
-                        let user =
-                            LowboyUser::new(username, email, None, Some(access_token), &mut conn)
-                                .await?;
 
-                        self.context
-                            .on_new_user(&user, registration_details)
-                            .await
-                            .map_err(|e| {
-                                Error::AppError(format!(
-                                    "there was an error executing on_new_user: {e}"
-                                ))
-                            })?;
+                    self.context
+                        .on_new_user(&user, registration_details)
+                        .await
+                        .map_err(|e| {
+                            Error::AppError(format!(
+                                "there was an error executing on_new_user: {e}"
+                            ))
+                        })?;
 
-                        user
-                    };
+                    user
+                };
 
                 Ok(Some(user))
             }
