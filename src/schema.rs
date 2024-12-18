@@ -27,7 +27,47 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    permission (id) {
+        id -> Integer,
+        name -> Text,
+    }
+}
+
+diesel::table! {
+    role (id) {
+        id -> Integer,
+        name -> Text,
+    }
+}
+
+diesel::table! {
+    user_permission (role_id, permission_id) {
+        role_id -> Nullable<Integer>,
+        permission_id -> Nullable<Integer>,
+    }
+}
+
+diesel::table! {
+    user_role (user_id, role_id) {
+        user_id -> Nullable<Integer>,
+        role_id -> Nullable<Integer>,
+    }
+}
+
 diesel::joinable!(email -> lowboy_user (user_id));
 diesel::joinable!(token -> lowboy_user (user_id));
+diesel::joinable!(user_permission -> permission (permission_id));
+diesel::joinable!(user_permission -> role (role_id));
+diesel::joinable!(user_role -> lowboy_user (user_id));
+diesel::joinable!(user_role -> role (role_id));
 
-diesel::allow_tables_to_appear_in_same_query!(email, lowboy_user, token,);
+diesel::allow_tables_to_appear_in_same_query!(
+    email,
+    lowboy_user,
+    permission,
+    role,
+    token,
+    user_permission,
+    user_role,
+);
