@@ -7,5 +7,5 @@ DROP TABLE permission;
 -- Drop user_role table.
 DROP TABLE user_role;
 
--- Drop user_permission table.
-DROP TABLE user_permission;
+-- Drop role_permission table.
+DROP TABLE role_permission;

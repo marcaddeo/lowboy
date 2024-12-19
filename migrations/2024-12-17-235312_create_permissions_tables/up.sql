@@ -12,21 +12,25 @@ CREATE TABLE IF NOT EXISTS permission (
 
 -- Create user_role table.
 CREATE TABLE IF NOT EXISTS user_role (
-    user_id INTEGER REFERENCES lowboy_user(id),
-    role_id INTEGER REFERENCES role(id),
+    user_id INTEGER NOT NULL REFERENCES lowboy_user(id),
+    role_id INTEGER NOT NULL REFERENCES role(id),
     PRIMARY KEY (user_id, role_id)
 );
 
--- Create user_permission table.
-CREATE TABLE IF NOT EXISTS user_permission (
-    role_id INTEGER REFERENCES role(id),
-    permission_id INTEGER REFERENCES permission(id),
+-- Create role_permission table.
+CREATE TABLE IF NOT EXISTS role_permission (
+    role_id INTEGER NOT NULL REFERENCES role(id),
+    permission_id INTEGER NOT NULL REFERENCES permission(id),
     PRIMARY KEY (role_id, permission_id)
 );
 
 -- Add anonymous role.
 INSERT INTO role (name)
 VALUES ('anonymous');
+
+-- Add unverified role.
+INSERT INTO role (name)
+VALUES ('unverified');
 
 -- Add authenticated role.
 INSERT INTO role (name)

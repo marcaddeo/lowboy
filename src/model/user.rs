@@ -1,16 +1,18 @@
+use std::collections::HashSet;
+
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
 use diesel::associations::HasTable;
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Nullable, Select, SqlTypeOf};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
+use diesel::sql_types::Text;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
 
-use crate::schema::{email, lowboy_user};
+use crate::schema::{email, lowboy_user, permission, role, role_permission, user_role};
 use crate::Connection;
 
 use super::{Email, EmailRecord, Model, UnverifiedEmail};
@@ -22,6 +24,8 @@ pub struct LowboyUser {
     pub email: Email,
     pub password: Option<String>,
     pub access_token: Option<String>,
+    pub roles: HashSet<String>,
+    pub permissions: HashSet<String>,
 }
 
 impl LowboyUser {
@@ -44,12 +48,16 @@ impl LowboyUser {
 
                 let email = UnverifiedEmail::new(user.id, email, conn).await?;
 
+                // @TODO add role
+
                 Ok(Self {
                     id: user.id,
                     username: user.username,
                     email: email.into(),
                     password: user.password,
                     access_token: user.access_token,
+                    roles: HashSet::new(),
+                    permissions: HashSet::new(),
                 })
             }
             .scope_boxed()
@@ -87,6 +95,8 @@ pub trait LowboyUserTrait: Model + FromLowboyUser {
     fn email(&self) -> &Email;
     fn password(&self) -> Option<&String>;
     fn access_token(&self) -> Option<&String>;
+    fn roles(&self) -> &HashSet<String>;
+    fn permissions(&self) -> &HashSet<String>;
     fn gravatar(&self) -> String {
         gravatars::Avatar::builder(&self.email().address)
             .size(256)
@@ -118,25 +128,66 @@ impl LowboyUserTrait for LowboyUser {
     fn access_token(&self) -> Option<&String> {
         self.access_token.as_ref()
     }
+
+    fn roles(&self) -> &HashSet<String> {
+        &self.roles
+    }
+
+    fn permissions(&self) -> &HashSet<String> {
+        &self.permissions
+    }
+}
+
+define_sql_function! {
+    fn group_concat(val: Text, separator: Text) -> Text;
 }
 
 #[async_trait::async_trait]
 impl Model for LowboyUser {
     type Record = LowboyUserRecord;
 
-    type RowSqlType = (lowboy_user::SqlType, email::SqlType);
+    type RowSqlType = (
+        AsSelect<LowboyUserRecord, Sqlite>,
+        AsSelect<EmailRecord, Sqlite>,
+        SqlTypeOf<group_concat<role::name, &'static str>>,
+        SqlTypeOf<Nullable<group_concat<permission::name, &'static str>>>,
+    );
 
     type Selection = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
+        SqlTypeOf<group_concat<role::name, &'static str>>,
+        SqlTypeOf<Nullable<group_concat<permission::name, &'static str>>>,
     );
 
-    type Query = Select<InnerJoin<lowboy_user::table, email::table>, Self::Selection>;
+    type Query = Select<
+        InnerJoin<
+            InnerJoin<lowboy_user::table, email::table>,
+            InnerJoin<
+                user_role::table,
+                LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
+            >,
+        >,
+        (
+            AsSelect<LowboyUserRecord, Sqlite>,
+            AsSelect<EmailRecord, Sqlite>,
+            group_concat<role::name, &'static str>,
+            Nullable<group_concat<permission::name, &'static str>>,
+        ),
+    >;
 
     fn query() -> Self::Query {
         Self::Record::table()
             .inner_join(email::table)
-            .select((Self::Record::as_select(), EmailRecord::as_select()))
+            .inner_join(user_role::table.inner_join(
+                role::table.left_join(role_permission::table.left_join(permission::table)),
+            ))
+            .select((
+                Self::Record::as_select(),
+                EmailRecord::as_select(),
+                group_concat(role::name, ","),
+                group_concat(permission::name, ",").nullable(),
+            ))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
@@ -150,15 +201,15 @@ impl Model for LowboyUser {
     }
 }
 
-impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
-    type SqlType = <LowboyUser as Model>::RowSqlType;
-}
+// impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
+//     type SqlType = <LowboyUser as Model>::RowSqlType;
+// }
 
 impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
-    type Row = (LowboyUserRecord, EmailRecord);
+    type Row = (LowboyUserRecord, EmailRecord, String, Option<String>);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (lowboy_user_record, email_record) = row;
+        let (lowboy_user_record, email_record, roles, permissions) = row;
 
         Ok(Self {
             id: lowboy_user_record.id,
@@ -166,6 +217,12 @@ impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
             email: email_record.into(),
             password: lowboy_user_record.password,
             access_token: lowboy_user_record.access_token,
+            roles: roles.split(",").map(String::from).collect(),
+            permissions: permissions
+                .unwrap_or_default()
+                .split(",")
+                .map(String::from)
+                .collect(),
         })
     }
 }
@@ -183,14 +240,7 @@ impl FromLowboyUser for LowboyUser {
     where
         Self: Sized,
     {
-        let user = user.clone();
-        Ok(Self {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            password: user.password,
-            access_token: user.access_token,
-        })
+        Ok(user.clone())
     }
 }
 
