@@ -1,9 +1,15 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use std::collections::HashSet;
+
+use diesel::dsl::{AsSelect, InnerJoin, Nullable, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{Email, FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model};
+use lowboy::model::{
+    group_concat, Email, EmailRecord, FromLowboyUser, LowboyUser, LowboyUserRecord,
+    LowboyUserTrait, Model,
+};
+use lowboy::schema::{permission, role};
 use lowboy::Connection;
 
 use crate::schema::user;
@@ -48,7 +54,18 @@ impl Model for User {
         <LowboyUser as Model>::Selection,
     );
 
-    type Query = Select<InnerJoin<<LowboyUser as Model>::Query, user::table>, Self::Selection>;
+    type Query = Select<
+        InnerJoin<<LowboyUser as Model>::Query, user::table>,
+        (
+            AsSelect<UserRecord, Sqlite>,
+            (
+                AsSelect<LowboyUserRecord, Sqlite>,
+                AsSelect<EmailRecord, Sqlite>,
+                group_concat<role::name, &'static str>,
+                Nullable<group_concat<permission::name, &'static str>>,
+            ),
+        ),
+    >;
 
     fn query() -> Self::Query {
         LowboyUser::query()
@@ -109,6 +126,14 @@ impl LowboyUserTrait for User {
 
     fn access_token(&self) -> Option<&String> {
         self.lowboy_user.access_token.as_ref()
+    }
+
+    fn roles(&self) -> &HashSet<String> {
+        &self.lowboy_user.roles
+    }
+
+    fn permissions(&self) -> &HashSet<String> {
+        &self.lowboy_user.permissions
     }
 }
 

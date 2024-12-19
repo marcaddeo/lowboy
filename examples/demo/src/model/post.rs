@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{EmailRecord, LowboyUserRecord, Model};
+use lowboy::model::{LowboyUserRecord, Model};
 use lowboy::Connection;
 
 use crate::model::{User, UserRecord};
@@ -68,7 +68,17 @@ impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         let (post_record, user_record, lowboy_user_record) = row;
-        let user = User::build((user_record, (lowboy_user_record, EmailRecord::default())))?;
+        let user = User::build((
+            user_record,
+            (
+                lowboy_user_record,
+                // Post does not need to know about these user details, so we can just use defaults.
+                // @TODO probably going to change this up later anyway.
+                Default::default(),
+                Default::default(),
+                Default::default(),
+            ),
+        ))?;
 
         Ok(Self {
             id: post_record.id,

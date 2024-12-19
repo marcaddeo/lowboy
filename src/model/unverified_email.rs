@@ -67,6 +67,10 @@ impl UnverifiedEmail {
         .await
     }
 
+    // @TODO just realized the token is kind of a dangley boi here... this will just load _any_
+    // token associated with the user.
+    // do we need a join table between them? email_token? unverified_email?
+    // Can fix this after.
     pub async fn find_by_address(
         address: &str,
         conn: &mut Connection,

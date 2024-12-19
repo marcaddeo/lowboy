@@ -1,8 +1,8 @@
 #![allow(clippy::transmute_ptr_to_ref)]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use axum_login::AuthnBackend;
+use axum_login::{AuthnBackend, AuthzBackend};
 use derive_masked::DebugMasked;
 use derive_more::derive::Display;
 use dyn_clone::DynClone;
@@ -19,7 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _};
+use crate::model::{CredentialKind, Credentials, LowboyUser, LowboyUserTrait, Model as _};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -371,6 +371,7 @@ impl AuthnBackend for LowboyAuth {
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
 
+        // @TODO confirm the user has a verified email before being able to authenticate
         match credentials.kind {
             CredentialKind::Password => {
                 let credentials = credentials
@@ -474,5 +475,17 @@ impl AuthnBackend for LowboyAuth {
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
         Ok(Some(LowboyUser::load(*user_id, &mut conn).await?))
+    }
+}
+
+#[async_trait]
+impl AuthzBackend for LowboyAuth {
+    type Permission = String;
+
+    async fn get_user_permissions(
+        &self,
+        user: &Self::User,
+    ) -> std::result::Result<HashSet<Self::Permission>, Self::Error> {
+        Ok(user.permissions().clone())
     }
 }
