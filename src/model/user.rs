@@ -15,7 +15,7 @@ use gravatar_api::avatars as gravatars;
 use crate::schema::{email, lowboy_user, permission, role, role_permission, user_role};
 use crate::Connection;
 
-use super::{Email, EmailRecord, Model, UnverifiedEmail};
+use super::{Email, EmailRecord, Model, Role, UnverifiedEmail};
 
 #[derive(Clone, Debug)]
 pub struct LowboyUser {
@@ -46,19 +46,15 @@ impl LowboyUser {
                 .save(conn)
                 .await?;
 
-                let email = UnverifiedEmail::new(user.id, email, conn).await?;
+                UnverifiedEmail::new(user.id, email, conn).await?;
 
-                // @TODO add role
+                Role::find_by_name("unverified", conn)
+                    .await?
+                    .expect("unverified role should exist")
+                    .assign(user.id, conn)
+                    .await?;
 
-                Ok(Self {
-                    id: user.id,
-                    username: user.username,
-                    email: email.into(),
-                    password: user.password,
-                    access_token: user.access_token,
-                    roles: HashSet::new(),
-                    permissions: HashSet::new(),
-                })
+                <Self as Model>::load(user.id, conn).await
             }
             .scope_boxed()
         })

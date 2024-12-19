@@ -6,7 +6,7 @@ use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
 
 use crate::model::Model;
-use crate::schema::role;
+use crate::schema::{role, user_role};
 use crate::Connection;
 
 #[derive(Clone, Debug)]
@@ -22,6 +22,16 @@ impl Role {
             .first(conn)
             .await
             .optional()
+    }
+
+    pub async fn assign(&self, user_id: i32, conn: &mut Connection) -> QueryResult<usize> {
+        diesel::insert_into(user_role::table)
+            .values((
+                user_role::user_id.eq(user_id),
+                user_role::role_id.eq(self.id),
+            ))
+            .execute(conn)
+            .await
     }
 }
 
