@@ -1,8 +1,8 @@
 #![allow(clippy::transmute_ptr_to_ref)]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use async_trait::async_trait;
-use axum_login::AuthnBackend;
+use axum_login::{AuthnBackend, AuthzBackend};
 use derive_masked::DebugMasked;
 use derive_more::derive::Display;
 use dyn_clone::DynClone;
@@ -19,7 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUser, Model as _, Operation};
+use crate::model::{CredentialKind, Credentials, LowboyUser, LowboyUserTrait, Model as _};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -125,6 +125,11 @@ impl RegistrationForm for LowboyRegisterForm {
 
 pub trait LowboyRegisterView<T: RegistrationForm + Default>: LowboyView + Clone + Default {
     fn set_form(&mut self, form: T) -> &mut Self;
+}
+
+pub trait LowboyEmailVerificationView: LowboyView + Clone + Default {
+    fn set_error(self, error: crate::model::unverified_email::Error) -> Self;
+    fn set_resend_verification_link(self, link: String) -> Self;
 }
 
 #[typetag::serde(tag = "LoginForm")]
@@ -366,6 +371,7 @@ impl AuthnBackend for LowboyAuth {
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
 
+        // @TODO confirm the user has a verified email before being able to authenticate
         match credentials.kind {
             CredentialKind::Password => {
                 let credentials = credentials
@@ -425,14 +431,27 @@ impl AuthnBackend for LowboyAuth {
                     RegistrationDetails::Local(_) => unreachable!(),
                 };
 
-                // Persist user in our database so we can use `get_user`.
-                let (record, operation) = LowboyUser::create_record(username, email)
-                    .with_access_token(token.secret())
-                    .save_or_update(&mut conn)
-                    .await?;
-                let user = LowboyUser::load(record.id, &mut conn).await?;
+                let access_token = token.secret();
+                let user = if let Some(mut user) =
+                    LowboyUser::find_by_username(username, &mut conn).await?
+                {
+                    // @note this caused some pain trying to figure out why i can't log back in
+                    // after logging out. we're returning the user model with the old token. leaving
+                    // this commented out here to figure out a better design later (never?? :D)
+                    // user.update_record()
+                    //     .with_access_token(access_token)
+                    //     .save(&mut conn)
+                    //     .await?;
+                    // user
 
-                if operation == Operation::Create {
+                    user.access_token = Some(access_token.to_owned());
+                    user.update_record().save(&mut conn).await?;
+                    user
+                } else {
+                    let user =
+                        LowboyUser::new(username, email, None, Some(access_token), &mut conn)
+                            .await?;
+
                     self.context
                         .on_new_user(&user, registration_details)
                         .await
@@ -441,7 +460,9 @@ impl AuthnBackend for LowboyAuth {
                                 "there was an error executing on_new_user: {e}"
                             ))
                         })?;
-                }
+
+                    user
+                };
 
                 Ok(Some(user))
             }
@@ -454,5 +475,17 @@ impl AuthnBackend for LowboyAuth {
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
         Ok(Some(LowboyUser::load(*user_id, &mut conn).await?))
+    }
+}
+
+#[async_trait]
+impl AuthzBackend for LowboyAuth {
+    type Permission = String;
+
+    async fn get_user_permissions(
+        &self,
+        user: &Self::User,
+    ) -> std::result::Result<HashSet<Self::Permission>, Self::Error> {
+        Ok(user.permissions().clone())
     }
 }

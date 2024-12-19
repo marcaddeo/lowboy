@@ -5,9 +5,19 @@ use diesel::QueryResult;
 use crate::Connection;
 
 mod credentials;
+mod email;
+mod permission;
+mod role;
+mod token;
+pub mod unverified_email;
 mod user;
 
 pub use credentials::*;
+pub use email::*;
+pub use permission::*;
+pub use role::*;
+pub use token::*;
+pub use unverified_email::*;
 pub use user::*;
 
 #[async_trait::async_trait]
