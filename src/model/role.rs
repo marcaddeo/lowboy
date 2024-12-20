@@ -4,12 +4,13 @@ use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
+use serde::Deserialize;
 
 use crate::model::Model;
 use crate::schema::{role, user_role};
 use crate::Connection;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Hash, Eq, PartialEq)]
 pub struct Role {
     pub id: i32,
     pub name: String,

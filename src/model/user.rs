@@ -5,7 +5,7 @@ use derive_masked::DebugMasked;
 use diesel::associations::HasTable;
 use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Nullable, Select, SqlTypeOf};
 use diesel::prelude::*;
-use diesel::sql_types::Text;
+use diesel::sql_types::{Integer, Text};
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -15,7 +15,7 @@ use gravatar_api::avatars as gravatars;
 use crate::schema::{email, lowboy_user, permission, role, role_permission, user_role};
 use crate::Connection;
 
-use super::{Email, EmailRecord, Model, Role, UnverifiedEmail};
+use super::{Email, EmailRecord, Model, Permission, Role, UnverifiedEmail};
 
 #[derive(Clone, Debug)]
 pub struct LowboyUser {
@@ -24,8 +24,8 @@ pub struct LowboyUser {
     pub email: Email,
     pub password: Option<String>,
     pub access_token: Option<String>,
-    pub roles: HashSet<String>,
-    pub permissions: HashSet<String>,
+    pub roles: HashSet<Role>,
+    pub permissions: HashSet<Permission>,
 }
 
 impl LowboyUser {
@@ -91,8 +91,8 @@ pub trait LowboyUserTrait: Model + FromLowboyUser {
     fn email(&self) -> &Email;
     fn password(&self) -> Option<&String>;
     fn access_token(&self) -> Option<&String>;
-    fn roles(&self) -> &HashSet<String>;
-    fn permissions(&self) -> &HashSet<String>;
+    fn roles(&self) -> &HashSet<Role>;
+    fn permissions(&self) -> &HashSet<Permission>;
     fn gravatar(&self) -> String {
         gravatars::Avatar::builder(&self.email().address)
             .size(256)
@@ -125,11 +125,11 @@ impl LowboyUserTrait for LowboyUser {
         self.access_token.as_ref()
     }
 
-    fn roles(&self) -> &HashSet<String> {
+    fn roles(&self) -> &HashSet<Role> {
         &self.roles
     }
 
-    fn permissions(&self) -> &HashSet<String> {
+    fn permissions(&self) -> &HashSet<Permission> {
         &self.permissions
     }
 }
@@ -138,6 +138,37 @@ define_sql_function! {
     fn group_concat(val: Text, separator: Text) -> Text;
 }
 
+define_sql_function! {
+    fn json_group_array(val: Text) -> Text;
+}
+
+// @TODO i believe Diesel will be adding general support for json_object eventually, so this should
+// be a temporary solution
+define_sql_function! {
+    #[sql_name = "json_object"]
+    fn role_record_json(a: Text, b: Integer, c: Text, d: Text) -> Text;
+}
+
+define_sql_function! {
+    #[sql_name = "json_object"]
+    fn permission_record_json(a: Text, b: diesel::sql_types::Nullable<Integer>, c: Text, d: diesel::sql_types::Nullable<Text>) -> Text;
+}
+
+// @TODO need to refactor Model trait
+pub type UserSelect = (
+    AsSelect<LowboyUserRecord, Sqlite>,
+    AsSelect<EmailRecord, Sqlite>,
+    json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+    json_group_array<
+        permission_record_json<
+            &'static str,
+            Nullable<permission::id>,
+            &'static str,
+            Nullable<permission::name>,
+        >,
+    >,
+);
+
 #[async_trait::async_trait]
 impl Model for LowboyUser {
     type Record = LowboyUserRecord;
@@ -145,15 +176,37 @@ impl Model for LowboyUser {
     type RowSqlType = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
-        SqlTypeOf<group_concat<role::name, &'static str>>,
-        SqlTypeOf<Nullable<group_concat<permission::name, &'static str>>>,
+        SqlTypeOf<
+            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+        >,
+        SqlTypeOf<
+            json_group_array<
+                permission_record_json<
+                    &'static str,
+                    Nullable<permission::id>,
+                    &'static str,
+                    Nullable<permission::name>,
+                >,
+            >,
+        >,
     );
 
     type Selection = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
-        SqlTypeOf<group_concat<role::name, &'static str>>,
-        SqlTypeOf<Nullable<group_concat<permission::name, &'static str>>>,
+        SqlTypeOf<
+            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+        >,
+        SqlTypeOf<
+            json_group_array<
+                permission_record_json<
+                    &'static str,
+                    Nullable<permission::id>,
+                    &'static str,
+                    Nullable<permission::name>,
+                >,
+            >,
+        >,
     );
 
     type Query = Select<
@@ -164,12 +217,7 @@ impl Model for LowboyUser {
                 LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
             >,
         >,
-        (
-            AsSelect<LowboyUserRecord, Sqlite>,
-            AsSelect<EmailRecord, Sqlite>,
-            group_concat<role::name, &'static str>,
-            Nullable<group_concat<permission::name, &'static str>>,
-        ),
+        UserSelect,
     >;
 
     fn query() -> Self::Query {
@@ -181,8 +229,13 @@ impl Model for LowboyUser {
             .select((
                 Self::Record::as_select(),
                 EmailRecord::as_select(),
-                group_concat(role::name, ","),
-                group_concat(permission::name, ",").nullable(),
+                json_group_array(role_record_json("id", role::id, "name", role::name)),
+                json_group_array(permission_record_json(
+                    "id",
+                    permission::id.nullable(),
+                    "name",
+                    permission::name.nullable(),
+                )),
             ))
     }
 
@@ -202,7 +255,7 @@ impl Model for LowboyUser {
 // }
 
 impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
-    type Row = (LowboyUserRecord, EmailRecord, String, Option<String>);
+    type Row = (LowboyUserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         let (lowboy_user_record, email_record, roles, permissions) = row;
@@ -213,12 +266,8 @@ impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
             email: email_record.into(),
             password: lowboy_user_record.password,
             access_token: lowboy_user_record.access_token,
-            roles: roles.split(",").map(String::from).collect(),
-            permissions: permissions
-                .unwrap_or_default()
-                .split(",")
-                .map(String::from)
-                .collect(),
+            roles: serde_json::from_str(&roles).unwrap_or_default(),
+            permissions: serde_json::from_str(&permissions).unwrap_or_default(),
         })
     }
 }

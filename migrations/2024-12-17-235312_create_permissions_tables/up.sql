@@ -42,4 +42,6 @@ VALUES ('administrator');
 
 -- Add admin user to administrator role.
 INSERT INTO user_role (user_id, role_id)
-VALUES (1, (SELECT id FROM role WHERE name = 'administrator'));
+VALUES
+    (1, (SELECT id FROM role WHERE name = 'authenticated')),
+    (1, (SELECT id FROM role WHERE name = 'administrator'));

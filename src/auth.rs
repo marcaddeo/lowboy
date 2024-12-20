@@ -19,7 +19,9 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUser, LowboyUserTrait, Model as _};
+use crate::model::{
+    CredentialKind, Credentials, LowboyUser, LowboyUserTrait, Model as _, Permission,
+};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -480,7 +482,7 @@ impl AuthnBackend for LowboyAuth {
 
 #[async_trait]
 impl AuthzBackend for LowboyAuth {
-    type Permission = String;
+    type Permission = Permission;
 
     async fn get_user_permissions(
         &self,
