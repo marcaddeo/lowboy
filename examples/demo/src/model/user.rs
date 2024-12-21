@@ -2,12 +2,11 @@ use std::collections::HashSet;
 
 use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{
     AssumeNullIsNotFoundExtension as _, Email, FromLowboyUser, LowboyUser, LowboyUserRecord,
-    LowboyUserTrait, Model, Permission, Role, UserSelect,
+    LowboyUserTrait, Model, Permission, Role,
 };
 use lowboy::schema::lowboy_user;
 use lowboy::Connection;
@@ -63,7 +62,10 @@ impl DemoUser for User {
 impl Model for User {
     type Record = UserRecord;
 
-    type RowSqlType = (user::SqlType, <LowboyUser as Model>::RowSqlType);
+    type RowSqlType = (
+        AsSelect<UserRecord, Sqlite>,
+        <LowboyUser as Model>::RowSqlType,
+    );
 
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
@@ -72,7 +74,10 @@ impl Model for User {
 
     type Query = Select<
         InnerJoin<<LowboyUser as Model>::Query, user::table>,
-        (AsSelect<UserRecord, Sqlite>, UserSelect),
+        (
+            AsSelect<UserRecord, Sqlite>,
+            <LowboyUser as Model>::Selection,
+        ),
     >;
 
     fn query() -> Self::Query {
@@ -90,10 +95,6 @@ impl Model for User {
             .first::<Self>(conn)
             .await
     }
-}
-
-impl CompatibleType<User, Sqlite> for <User as Model>::Selection {
-    type SqlType = <User as Model>::RowSqlType;
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {

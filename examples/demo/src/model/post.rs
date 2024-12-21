@@ -1,6 +1,5 @@
 use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{LowboyUserRecord, Model};
@@ -30,7 +29,7 @@ impl Post {
 impl Model for Post {
     type Record = PostRecord;
 
-    type RowSqlType = (post::SqlType, user::SqlType, lowboy_user::SqlType);
+    type RowSqlType = Self::Selection;
 
     type Selection = (
         AsSelect<PostRecord, Sqlite>,
@@ -57,10 +56,6 @@ impl Model for Post {
             .first::<Post>(conn)
             .await
     }
-}
-
-impl CompatibleType<Post, Sqlite> for <Post as Model>::Selection {
-    type SqlType = <Post as Model>::RowSqlType;
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {

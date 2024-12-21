@@ -1,6 +1,5 @@
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
@@ -29,7 +28,7 @@ impl Permission {
 #[async_trait::async_trait]
 impl Model for Permission {
     type Record = PermissionRecord;
-    type RowSqlType = (permission::SqlType,);
+    type RowSqlType = Self::Selection;
     type Selection = (AsSelect<PermissionRecord, Sqlite>,);
     type Query = Select<permission::table, Self::Selection>;
 
@@ -43,10 +42,6 @@ impl Model for Permission {
             .first(conn)
             .await
     }
-}
-
-impl CompatibleType<Permission, Sqlite> for <Permission as Model>::Selection {
-    type SqlType = <Permission as Model>::RowSqlType;
 }
 
 impl Queryable<<Permission as Model>::RowSqlType, Sqlite> for Permission {

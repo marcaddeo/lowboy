@@ -2,7 +2,6 @@ use chrono::{DateTime, Utc};
 use constant_time_eq::constant_time_eq;
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 
@@ -27,7 +26,7 @@ impl Token {
 #[async_trait::async_trait]
 impl Model for Token {
     type Record = TokenRecord;
-    type RowSqlType = (token::SqlType,);
+    type RowSqlType = Self::Selection;
     type Selection = (AsSelect<TokenRecord, Sqlite>,);
     type Query = Select<token::table, Self::Selection>;
 
@@ -42,10 +41,6 @@ impl Model for Token {
             .first::<Self>(conn)
             .await
     }
-}
-
-impl CompatibleType<Token, Sqlite> for <Token as Model>::Selection {
-    type SqlType = <Token as Model>::RowSqlType;
 }
 
 impl Queryable<<Token as Model>::RowSqlType, Sqlite> for Token {

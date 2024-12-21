@@ -1,6 +1,5 @@
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
@@ -54,7 +53,7 @@ impl Role {
 #[async_trait::async_trait]
 impl Model for Role {
     type Record = RoleRecord;
-    type RowSqlType = (role::SqlType,);
+    type RowSqlType = Self::Selection;
     type Selection = (AsSelect<RoleRecord, Sqlite>,);
     type Query = Select<role::table, Self::Selection>;
 
@@ -65,10 +64,6 @@ impl Model for Role {
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
         Self::query().filter(role::id.eq(id)).first(conn).await
     }
-}
-
-impl CompatibleType<Role, Sqlite> for <Role as Model>::Selection {
-    type SqlType = <Role as Model>::RowSqlType;
 }
 
 impl Queryable<<Role as Model>::RowSqlType, Sqlite> for Role {

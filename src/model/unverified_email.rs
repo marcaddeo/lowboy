@@ -1,7 +1,6 @@
 use chrono::{Duration, Utc};
 use diesel::dsl::{AsSelect, Eq, Filter, InnerJoin, On, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult};
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -121,7 +120,7 @@ impl UnverifiedEmail {
 #[async_trait::async_trait]
 impl Model for UnverifiedEmail {
     type Record = EmailRecord;
-    type RowSqlType = (email::SqlType, token::SqlType);
+    type RowSqlType = Self::Selection;
     type Selection = (AsSelect<EmailRecord, Sqlite>, AsSelect<TokenRecord, Sqlite>);
     type Query = Select<
         Filter<
@@ -145,10 +144,6 @@ impl Model for UnverifiedEmail {
             .first(conn)
             .await
     }
-}
-
-impl CompatibleType<UnverifiedEmail, Sqlite> for <UnverifiedEmail as Model>::Selection {
-    type SqlType = <UnverifiedEmail as Model>::RowSqlType;
 }
 
 impl Queryable<<UnverifiedEmail as Model>::RowSqlType, Sqlite> for UnverifiedEmail {

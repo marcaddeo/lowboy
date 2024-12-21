@@ -183,21 +183,6 @@ define_sql_function! {
     fn permission_record_json(a: Text, b: diesel::sql_types::Nullable<Integer>, c: Text, d: diesel::sql_types::Nullable<Text>) -> Text;
 }
 
-// @TODO need to refactor Model trait
-pub type UserSelect = (
-    AsSelect<LowboyUserRecord, Sqlite>,
-    AsSelect<EmailRecord, Sqlite>,
-    json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
-    json_group_array<
-        permission_record_json<
-            &'static str,
-            Nullable<permission::id>,
-            &'static str,
-            Nullable<permission::name>,
-        >,
-    >,
-);
-
 #[async_trait::async_trait]
 impl Model for LowboyUser {
     type Record = LowboyUserRecord;
@@ -223,17 +208,13 @@ impl Model for LowboyUser {
     type Selection = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
-        SqlTypeOf<
-            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
-        >,
-        SqlTypeOf<
-            json_group_array<
-                permission_record_json<
-                    &'static str,
-                    Nullable<permission::id>,
-                    &'static str,
-                    Nullable<permission::name>,
-                >,
+        json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+        json_group_array<
+            permission_record_json<
+                &'static str,
+                Nullable<permission::id>,
+                &'static str,
+                Nullable<permission::name>,
             >,
         >,
     );
@@ -246,7 +227,7 @@ impl Model for LowboyUser {
                 LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
             >,
         >,
-        UserSelect,
+        Self::Selection,
     >;
 
     fn query() -> Self::Query {
@@ -278,10 +259,6 @@ impl Model for LowboyUser {
             .await
     }
 }
-
-// impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
-//     type SqlType = <LowboyUser as Model>::RowSqlType;
-// }
 
 impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
     type Row = (LowboyUserRecord, EmailRecord, String, String);

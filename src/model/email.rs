@@ -1,7 +1,6 @@
 use derive_more::derive::Display;
 use diesel::dsl::{AsSelect, Select};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::RunQueryDsl;
@@ -58,7 +57,7 @@ impl Email {
 #[async_trait::async_trait]
 impl Model for Email {
     type Record = EmailRecord;
-    type RowSqlType = (email::SqlType,);
+    type RowSqlType = Self::Selection;
     type Selection = (AsSelect<EmailRecord, Sqlite>,);
     type Query = Select<email::table, Self::Selection>;
 
@@ -69,10 +68,6 @@ impl Model for Email {
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
         Self::query().filter(email::id.eq(id)).first(conn).await
     }
-}
-
-impl CompatibleType<Email, Sqlite> for <Email as Model>::Selection {
-    type SqlType = <Email as Model>::RowSqlType;
 }
 
 impl Queryable<<Email as Model>::RowSqlType, Sqlite> for Email {
