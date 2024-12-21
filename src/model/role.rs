@@ -34,6 +34,21 @@ impl Role {
             .execute(conn)
             .await
     }
+
+    pub async fn unassign(&self, user_id: i32, conn: &mut Connection) -> QueryResult<usize> {
+        diesel::delete(
+            user_role::table
+                .filter(user_role::user_id.eq(user_id))
+                .filter(
+                    user_role::role_id.nullable().eq(role::table
+                        .filter(role::name.eq(&self.name))
+                        .select(role::id)
+                        .single_value()),
+                ),
+        )
+        .execute(conn)
+        .await
+    }
 }
 
 #[async_trait::async_trait]

@@ -73,6 +73,10 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
         } else {
             None
         };
+
+        // @TODO display an error message on every page telling the user their email has not been
+        // verified. It shouldn't really be _here_, but just need to make note.
+
         let mut layout_context = LayoutContext::default();
 
         layout_context.insert(
