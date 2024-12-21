@@ -19,7 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{CredentialKind, Credentials, LowboyUserTrait, Model as _, Permission, User};
+use crate::model::{CredentialKind, Credentials, Model as _, Permission, User, UserModel};
 use crate::view::LowboyView;
 use crate::AppContext;
 

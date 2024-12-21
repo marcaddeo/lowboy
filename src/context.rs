@@ -16,7 +16,7 @@ use tokio_cron_scheduler::JobScheduler;
 use crate::auth::RegistrationDetails;
 use crate::config::Config;
 use crate::model::unverified_email::UnverifiedEmail;
-use crate::model::{LowboyUserTrait, User};
+use crate::model::{User, UserModel};
 use crate::{Connection, Events};
 
 type Result<T> = std::result::Result<T, Error>;

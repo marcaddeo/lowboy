@@ -99,7 +99,7 @@ impl User {
 }
 
 #[async_trait::async_trait]
-pub trait LowboyUserTrait: Model {
+pub trait UserModel: Model {
     fn id(&self) -> i32;
     fn username(&self) -> &String;
     fn email(&self) -> &Email;
@@ -123,7 +123,7 @@ pub trait LowboyUserTrait: Model {
 }
 
 #[async_trait::async_trait]
-impl LowboyUserTrait for User {
+impl UserModel for User {
     fn id(&self) -> i32 {
         self.id
     }
