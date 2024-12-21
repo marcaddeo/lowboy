@@ -61,7 +61,7 @@ impl User {
     ) -> QueryResult<Self> {
         conn.transaction(|conn| {
             async move {
-                let user = CreateLowboyUserRecord {
+                let user = CreateUserRecord {
                     username,
                     password,
                     access_token,
@@ -185,7 +185,7 @@ define_sql_function! {
 #[async_trait::async_trait]
 impl Model for User {
     type RowSqlType = (
-        AsSelect<LowboyUserRecord, Sqlite>,
+        AsSelect<UserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
         SqlTypeOf<
             json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
@@ -202,7 +202,7 @@ impl Model for User {
         >,
     );
     type Selection = (
-        AsSelect<LowboyUserRecord, Sqlite>,
+        AsSelect<UserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
         json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
         json_group_array<
@@ -232,7 +232,7 @@ impl Model for User {
                 role::table.left_join(role_permission::table.left_join(permission::table)),
             ))
             .select((
-                LowboyUserRecord::as_select(),
+                UserRecord::as_select(),
                 EmailRecord::as_select(),
                 json_group_array(role_record_json("id", role::id, "name", role::name)),
                 json_group_array(permission_record_json(
@@ -256,17 +256,17 @@ impl Model for User {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (LowboyUserRecord, EmailRecord, String, String);
+    type Row = (UserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (lowboy_user_record, email_record, roles, permissions) = row;
+        let (user_record, email_record, roles, permissions) = row;
 
         Ok(Self {
-            id: lowboy_user_record.id,
-            username: lowboy_user_record.username,
+            id: user_record.id,
+            username: user_record.username,
             email: email_record.into(),
-            password: lowboy_user_record.password,
-            access_token: lowboy_user_record.access_token,
+            password: user_record.password,
+            access_token: user_record.access_token,
             roles: serde_json::from_str(&roles).unwrap_or_default(),
             permissions: serde_json::from_str(&permissions).unwrap_or_default(),
         })
@@ -314,24 +314,24 @@ impl AuthUser for User {
 #[derive(Clone, DebugMasked, Default, Queryable, Selectable, AsChangeset, Identifiable)]
 #[diesel(table_name = crate::schema::lowboy_user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct LowboyUserRecord {
+pub struct UserRecord {
     pub id: i32,
     pub username: String,
     pub password: Option<String>,
     pub access_token: Option<String>,
 }
 
-impl LowboyUserRecord {
-    pub fn create(username: &str) -> CreateLowboyUserRecord {
-        CreateLowboyUserRecord::new(username)
+impl UserRecord {
+    pub fn create(username: &str) -> CreateUserRecord {
+        CreateUserRecord::new(username)
     }
 
-    pub async fn read(id: i32, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {
+    pub async fn read(id: i32, conn: &mut Connection) -> QueryResult<UserRecord> {
         lowboy_user::table.find(id).get_result(conn).await
     }
 
-    pub fn update(&self) -> UpdateLowboyUserRecord {
-        UpdateLowboyUserRecord::from_record(self)
+    pub fn update(&self) -> UpdateUserRecord {
+        UpdateUserRecord::from_record(self)
     }
 
     pub async fn delete(&self, conn: &mut Connection) -> QueryResult<usize> {
@@ -342,7 +342,7 @@ impl LowboyUserRecord {
 }
 
 /// Convert from a `User` model into `LowboyUserRecord`
-impl From<User> for LowboyUserRecord {
+impl From<User> for UserRecord {
     fn from(value: User) -> Self {
         Self {
             id: value.id,
@@ -356,37 +356,35 @@ impl From<User> for LowboyUserRecord {
 #[derive(Debug, Default, Insertable)]
 #[diesel(table_name = crate::schema::lowboy_user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct CreateLowboyUserRecord<'a> {
+pub struct CreateUserRecord<'a> {
     pub username: &'a str,
     pub password: Option<&'a str>,
     pub access_token: Option<&'a str>,
 }
 
-impl<'a> CreateLowboyUserRecord<'a> {
-    /// Create a new `NewLowboyUserRecord` object
-    pub fn new(username: &'a str) -> CreateLowboyUserRecord<'a> {
+impl<'a> CreateUserRecord<'a> {
+    pub fn new(username: &'a str) -> CreateUserRecord<'a> {
         Self {
             username,
             ..Default::default()
         }
     }
 
-    pub fn with_password(self, password: &'a str) -> CreateLowboyUserRecord<'a> {
+    pub fn with_password(self, password: &'a str) -> CreateUserRecord<'a> {
         Self {
             password: Some(password),
             ..self
         }
     }
 
-    pub fn with_access_token(self, access_token: &'a str) -> CreateLowboyUserRecord<'a> {
+    pub fn with_access_token(self, access_token: &'a str) -> CreateUserRecord<'a> {
         Self {
             access_token: Some(access_token),
             ..self
         }
     }
 
-    /// Create a new `user` in the database
-    pub async fn save(&self, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {
+    pub async fn save(&self, conn: &mut Connection) -> QueryResult<UserRecord> {
         diesel::insert_into(crate::schema::lowboy_user::table)
             .values(self)
             .returning(crate::schema::lowboy_user::table::all_columns())
@@ -398,14 +396,14 @@ impl<'a> CreateLowboyUserRecord<'a> {
 #[derive(Debug, Default, Identifiable, AsChangeset)]
 #[diesel(table_name = crate::schema::lowboy_user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
-pub struct UpdateLowboyUserRecord<'a> {
+pub struct UpdateUserRecord<'a> {
     pub id: i32,
     pub username: &'a str,
     pub password: Option<&'a str>,
     pub access_token: Option<&'a str>,
 }
 
-impl<'a> UpdateLowboyUserRecord<'a> {
+impl<'a> UpdateUserRecord<'a> {
     pub fn new(id: i32) -> Self {
         Self {
             id,
@@ -422,7 +420,7 @@ impl<'a> UpdateLowboyUserRecord<'a> {
         }
     }
 
-    pub fn from_record(record: &'a LowboyUserRecord) -> Self {
+    pub fn from_record(record: &'a UserRecord) -> Self {
         Self {
             id: record.id,
             username: &record.username,
@@ -449,7 +447,7 @@ impl<'a> UpdateLowboyUserRecord<'a> {
         }
     }
 
-    pub async fn save(&self, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {
+    pub async fn save(&self, conn: &mut Connection) -> QueryResult<UserRecord> {
         diesel::update(self)
             .set(self)
             .returning(crate::schema::lowboy_user::all_columns)
@@ -459,19 +457,19 @@ impl<'a> UpdateLowboyUserRecord<'a> {
 }
 
 impl User {
-    pub fn create_record(username: &str) -> CreateLowboyUserRecord {
-        CreateLowboyUserRecord::new(username)
+    pub fn create_record(username: &str) -> CreateUserRecord {
+        CreateUserRecord::new(username)
     }
 
-    pub async fn read_record(id: i32, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {
-        LowboyUserRecord::read(id, conn).await
+    pub async fn read_record(id: i32, conn: &mut Connection) -> QueryResult<UserRecord> {
+        UserRecord::read(id, conn).await
     }
 
-    pub fn update_record(&self) -> UpdateLowboyUserRecord {
-        UpdateLowboyUserRecord::from_user(self)
+    pub fn update_record(&self) -> UpdateUserRecord {
+        UpdateUserRecord::from_user(self)
     }
 
     pub async fn delete_record(self, conn: &mut Connection) -> QueryResult<usize> {
-        LowboyUserRecord::from(self).delete(conn).await
+        UserRecord::from(self).delete(conn).await
     }
 }
