@@ -85,18 +85,6 @@ impl LowboyUser {
         .await
     }
 
-    pub async fn find_by_username(
-        username: &str,
-        conn: &mut Connection,
-    ) -> QueryResult<Option<Self>> {
-        Self::query()
-            .filter(lowboy_user::username.eq(username))
-            .first::<Self>(conn)
-            .await
-            .assume_null_is_not_found()
-            .optional()
-    }
-
     pub async fn find_by_username_having_password(
         username: &str,
         conn: &mut Connection,
@@ -111,6 +99,7 @@ impl LowboyUser {
     }
 }
 
+#[async_trait::async_trait]
 pub trait LowboyUserTrait: Model + FromLowboyUser {
     fn id(&self) -> i32;
     fn username(&self) -> &String;
@@ -128,8 +117,13 @@ pub trait LowboyUserTrait: Model + FromLowboyUser {
             .image_url()
             .to_string()
     }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
+    where
+        Self: Sized;
 }
 
+#[async_trait::async_trait]
 impl LowboyUserTrait for LowboyUser {
     fn id(&self) -> i32 {
         self.id
@@ -157,6 +151,15 @@ impl LowboyUserTrait for LowboyUser {
 
     fn permissions(&self) -> &HashSet<Permission> {
         &self.permissions
+    }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .first::<Self>(conn)
+            .await
+            .assume_null_is_not_found()
+            .optional()
     }
 }
 
