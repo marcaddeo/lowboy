@@ -190,6 +190,7 @@ pub trait LowboyLoginView<T: LoginForm + Default>: LowboyView + Clone + Default 
     fn set_form(&mut self, form: T) -> &mut Self;
 }
 
+#[derive(Clone)]
 pub enum RegistrationDetails {
     GitHub(GitHubUserInfo),
     Discord(DiscordUserInfo),
@@ -344,7 +345,7 @@ impl LowboyAuth {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct GitHubUserInfo {
     pub login: String,
     pub email: String,
@@ -352,7 +353,7 @@ pub struct GitHubUserInfo {
     pub name: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 pub struct DiscordUserInfo {
     pub id: String,
     pub username: String,

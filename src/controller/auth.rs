@@ -384,8 +384,8 @@ pub async fn verify_email<App: app::App<AC>, AC: CloneableAppContext>(
 
     match email.verify(&token, &mut conn).await {
         Ok(_) => {
-            messages.success("Your email address has been verified. You may now login.");
-            Ok(Redirect::to("/login").into_response())
+            messages.success("Your email address has been verified.");
+            Ok(Redirect::to("/").into_response())
         }
         Err(error) => {
             warn!("couldn't verify email {address}: {error}");

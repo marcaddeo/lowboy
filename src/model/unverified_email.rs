@@ -14,6 +14,8 @@ use crate::model::{
 use crate::schema::{email, token};
 use crate::Connection;
 
+use super::Role;
+
 type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, thiserror::Error)]
@@ -95,6 +97,18 @@ impl UnverifiedEmail {
                     .await?;
 
                 self.token.delete_record(conn).await?;
+
+                Role::find_by_name("unverified", conn)
+                    .await?
+                    .expect("unverified role should exist")
+                    .unassign(email_record.user_id, conn)
+                    .await?;
+
+                Role::find_by_name("authenticated", conn)
+                    .await?
+                    .expect("authenticated role should exist")
+                    .assign(email_record.user_id, conn)
+                    .await?;
 
                 Ok(email_record.into())
             }

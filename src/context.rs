@@ -8,13 +8,15 @@ use diesel_async::{AsyncConnection, SimpleAsyncConnection};
 use dyn_clone::DynClone;
 use flume::{Receiver, Sender};
 use futures::FutureExt;
+use lettre::message::{header, MultiPart, SinglePart};
 use lettre::transport::smtp::authentication::Credentials;
-use lettre::{AsyncSmtpTransport, Tokio1Executor};
+use lettre::{AsyncSmtpTransport, AsyncTransport as _, Message, Tokio1Executor};
 use tokio_cron_scheduler::JobScheduler;
 
 use crate::auth::RegistrationDetails;
 use crate::config::Config;
-use crate::model::LowboyUser;
+use crate::model::unverified_email::UnverifiedEmail;
+use crate::model::{LowboyUser, LowboyUserTrait};
 use crate::{Connection, Events};
 
 type Result<T> = std::result::Result<T, Error>;
@@ -81,6 +83,51 @@ pub trait AppContext: Context + DynClone {
         Self: Sized;
 
     async fn on_new_user(&self, user: &LowboyUser, details: RegistrationDetails) -> Result<()> {
+        self.send_verification_email(user).await?;
+        Ok(())
+    }
+
+    async fn send_verification_email(&self, user: &LowboyUser) -> Result<()> {
+        if !user.email.verified {
+            tracing::info!(
+                "Sending new user verification email to: {email}",
+                email = user.email
+            );
+            let mut conn = self.database().get().await?;
+            let unverified_email =
+                UnverifiedEmail::find_by_address(&user.email().address, &mut conn)
+                    .await?
+                    .expect("should be able to load the unverified email");
+
+            let verification_url = format!(
+                "http://localhost:3000/email/{email}/verify/{token}",
+                email = unverified_email.address,
+                token = unverified_email.token.secret,
+            );
+
+            let verification_email = Message::builder()
+                .from("Lowboy <no-reply@marc.cx>".parse()?)
+                .to(format!("<{}>", user.email()).parse()?)
+                .subject("Email Verification")
+                .multipart(
+                    MultiPart::alternative()
+                        .singlepart(
+                            SinglePart::builder()
+                                .header(header::ContentType::TEXT_PLAIN)
+                                .body(format!("Go here to verify your email: {verification_url}")),
+                        )
+                        .singlepart(
+                            SinglePart::builder()
+                                .header(header::ContentType::TEXT_HTML)
+                                .body(format!(r#"Click here to verify your email: <a href="{verification_url}">{verification_url}</a>"#)),
+                        ),
+                )?;
+
+            if let Some(mailer) = self.mailer() {
+                mailer.send(verification_email).await?;
+            }
+        }
+
         Ok(())
     }
 }
