@@ -6,9 +6,10 @@ use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{
-    Email, FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model, Permission, Role,
-    UserSelect,
+    AssumeNullIsNotFoundExtension as _, Email, FromLowboyUser, LowboyUser, LowboyUserRecord,
+    LowboyUserTrait, Model, Permission, Role, UserSelect,
 };
+use lowboy::schema::lowboy_user;
 use lowboy::Connection;
 
 use crate::schema::user;
@@ -98,6 +99,7 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
     }
 }
 
+#[async_trait::async_trait]
 impl LowboyUserTrait for User {
     fn id(&self) -> i32 {
         self.id
@@ -125,6 +127,18 @@ impl LowboyUserTrait for User {
 
     fn permissions(&self) -> &HashSet<Permission> {
         &self.lowboy_user.permissions
+    }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
+    where
+        Self: Sized,
+    {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .first::<Self>(conn)
+            .await
+            .assume_null_is_not_found()
+            .optional()
     }
 }
 
