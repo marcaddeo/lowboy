@@ -2,11 +2,11 @@ use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{LowboyUserRecord, Model};
+use lowboy::model::{Model, UserModel, UserRecord};
 use lowboy::Connection;
 
-use crate::model::{User, UserRecord};
-use crate::schema::{lowboy_user, post, user};
+use crate::model::{User, UserProfileRecord};
+use crate::schema::{lowboy_user, post, user_profile};
 
 #[derive(Clone, Debug)]
 pub struct Post {
@@ -30,19 +30,21 @@ impl Model for Post {
     type RowSqlType = Self::Selection;
     type Selection = (
         AsSelect<PostRecord, Sqlite>,
+        AsSelect<UserProfileRecord, Sqlite>,
         AsSelect<UserRecord, Sqlite>,
-        AsSelect<LowboyUserRecord, Sqlite>,
     );
-    type Query =
-        Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
+    type Query = Select<
+        InnerJoin<post::table, InnerJoin<user_profile::table, lowboy_user::table>>,
+        Self::Selection,
+    >;
 
     fn query() -> Self::Query {
         post::table
-            .inner_join(user::table.inner_join(lowboy_user::table))
+            .inner_join(user_profile::table.inner_join(lowboy_user::table))
             .select((
                 PostRecord::as_select(),
+                UserProfileRecord::as_select(),
                 UserRecord::as_select(),
-                LowboyUserRecord::as_select(),
             ))
     }
 
@@ -55,7 +57,7 @@ impl Model for Post {
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, UserRecord, LowboyUserRecord);
+    type Row = (PostRecord, UserProfileRecord, UserRecord);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         let (post_record, user_record, lowboy_user_record) = row;
@@ -116,7 +118,7 @@ impl From<Post> for PostRecord {
         Self {
             id: value.id,
             content: value.content,
-            user_id: value.user.id,
+            user_id: value.user.id(),
         }
     }
 }
@@ -165,7 +167,7 @@ impl<'a> UpdatePostRecord<'a> {
     pub fn from_post(post: &'a Post) -> Self {
         Self {
             id: post.id,
-            user_id: Some(post.user.id),
+            user_id: Some(post.user.id()),
             content: Some(&post.content),
         }
     }

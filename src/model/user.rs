@@ -120,6 +120,14 @@ pub trait UserModel: Model {
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
     where
         Self: Sized;
+
+    fn is_authenticated(&self) -> bool {
+        self.roles().iter().any(|r| r.name == "authenticated")
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        self.permissions().iter().any(|p| p.name == permission)
+    }
 }
 
 #[async_trait::async_trait]

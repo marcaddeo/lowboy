@@ -1,5 +1,5 @@
 use axum_messages::Message;
-use lowboy::model::LowboyUserTrait;
+use lowboy::model::UserModel;
 use lowboy::view::{LayoutContext, LowboyLayout};
 use rinja::Template;
 
@@ -8,14 +8,14 @@ use crate::model::DemoUser;
 #[derive(Template)]
 #[template(path = "layout.html")]
 #[derive_where::derive_where(Default)]
-pub struct Layout<T: LowboyUserTrait + DemoUser> {
+pub struct Layout<T: UserModel + DemoUser> {
     pub messages: Vec<Message>,
     pub content: String,
     pub user: Option<T>,
     pub context: LayoutContext,
 }
 
-impl<T: LowboyUserTrait + DemoUser> LowboyLayout<T> for Layout<T> {
+impl<T: UserModel + DemoUser> LowboyLayout<T> for Layout<T> {
     fn set_messages(&mut self, messages: Vec<Message>) -> &mut Self {
         self.messages = messages;
         self

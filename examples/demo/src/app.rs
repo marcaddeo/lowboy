@@ -5,13 +5,13 @@ use axum_login::login_required;
 use diesel_async::pooled_connection::deadpool::Pool;
 use lettre::{AsyncSmtpTransport, Tokio1Executor};
 use lowboy::auth::{LowboyLoginForm, RegistrationDetails};
-use lowboy::model::LowboyUser;
+use lowboy::model::User as LowboyUser;
 use lowboy::{context, App, AppContext, Connection, Context, Events, LowboyAuth};
 use tokio_cron_scheduler::JobScheduler;
 
 use crate::controller;
 use crate::form::RegisterForm;
-use crate::model::User;
+use crate::model::{User, UserProfileRecord};
 use crate::view::auth::{EmailVerification, Login, Register};
 use crate::view::{self, Layout};
 
@@ -75,7 +75,7 @@ impl AppContext for DemoContext {
                 }),
             ),
         };
-        let mut record = User::create_record(user.id, &name);
+        let mut record = UserProfileRecord::create(user.id, &name);
 
         if let Some(avatar) = avatar.as_deref() {
             record = record.with_avatar(avatar);

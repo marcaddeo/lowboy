@@ -2,7 +2,7 @@ use axum::extract::Form;
 use axum::response::IntoResponse;
 use lowboy::error::LowboyError;
 use lowboy::extract::{DatabaseConnection, EnsureAppUser};
-use lowboy::model::Model as _;
+use lowboy::model::{Model as _, UserModel};
 use serde::Deserialize;
 
 use crate::app::{Demo, DemoContext};
@@ -23,7 +23,7 @@ pub async fn create(
         return Err(LowboyError::Unauthorized);
     }
 
-    let record = Post::create_record(author.id, &input.message)
+    let record = Post::create_record(author.id(), &input.message)
         .save(&mut conn)
         .await?;
     let post = Post::load(record.id, &mut conn).await?;
