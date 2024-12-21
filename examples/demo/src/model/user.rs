@@ -23,6 +23,22 @@ pub struct User {
     pub byline: Option<String>,
 }
 
+impl User {
+    pub fn is_authenticated(&self) -> bool {
+        self.lowboy_user
+            .roles()
+            .iter()
+            .any(|r| r.name == "authenticated")
+    }
+
+    pub fn has_permission(&self, permission: &str) -> bool {
+        self.lowboy_user
+            .permissions()
+            .iter()
+            .any(|p| p.name == permission)
+    }
+}
+
 pub trait DemoUser {
     fn name(&self) -> &String;
     fn avatar(&self) -> Option<&String>;

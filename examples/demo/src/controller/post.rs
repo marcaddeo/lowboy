@@ -19,6 +19,10 @@ pub async fn create(
     DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> Result<impl IntoResponse, LowboyError> {
+    if !author.is_authenticated() {
+        return Err(LowboyError::Unauthorized);
+    }
+
     let record = Post::create_record(author.id, &input.message)
         .save(&mut conn)
         .await?;
