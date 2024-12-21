@@ -41,7 +41,7 @@ impl<T> AssumeNullIsNotFoundExtension<T> for QueryResult<T> {
 }
 
 #[derive(Clone, Debug)]
-pub struct LowboyUser {
+pub struct User {
     pub id: i32,
     pub username: String,
     pub email: Email,
@@ -51,7 +51,7 @@ pub struct LowboyUser {
     pub permissions: HashSet<Permission>,
 }
 
-impl LowboyUser {
+impl User {
     pub async fn new(
         username: &str,
         email: &str,
@@ -123,7 +123,7 @@ pub trait LowboyUserTrait: Model + FromLowboyUser {
 }
 
 #[async_trait::async_trait]
-impl LowboyUserTrait for LowboyUser {
+impl LowboyUserTrait for User {
     fn id(&self) -> i32 {
         self.id
     }
@@ -183,7 +183,7 @@ define_sql_function! {
 }
 
 #[async_trait::async_trait]
-impl Model for LowboyUser {
+impl Model for User {
     type RowSqlType = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
@@ -255,7 +255,7 @@ impl Model for LowboyUser {
     }
 }
 
-impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
+impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
     type Row = (LowboyUserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -275,14 +275,14 @@ impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
 
 #[async_trait::async_trait]
 pub trait FromLowboyUser {
-    async fn from_lowboy_user(user: &LowboyUser, conn: &mut Connection) -> QueryResult<Self>
+    async fn from_lowboy_user(user: &User, conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized;
 }
 
 #[async_trait::async_trait]
-impl FromLowboyUser for LowboyUser {
-    async fn from_lowboy_user(user: &LowboyUser, _conn: &mut Connection) -> QueryResult<Self>
+impl FromLowboyUser for User {
+    async fn from_lowboy_user(user: &User, _conn: &mut Connection) -> QueryResult<Self>
     where
         Self: Sized,
     {
@@ -290,7 +290,7 @@ impl FromLowboyUser for LowboyUser {
     }
 }
 
-impl AuthUser for LowboyUser {
+impl AuthUser for User {
     type Id = i32;
 
     fn id(&self) -> Self::Id {
@@ -342,8 +342,8 @@ impl LowboyUserRecord {
 }
 
 /// Convert from a `User` model into `LowboyUserRecord`
-impl From<LowboyUser> for LowboyUserRecord {
-    fn from(value: LowboyUser) -> Self {
+impl From<User> for LowboyUserRecord {
+    fn from(value: User) -> Self {
         Self {
             id: value.id,
             username: value.username,
@@ -413,12 +413,12 @@ impl<'a> UpdateLowboyUserRecord<'a> {
         }
     }
 
-    pub fn from_lowboy_user(lowboy_user: &'a LowboyUser) -> Self {
+    pub fn from_user(user: &'a User) -> Self {
         Self {
-            id: lowboy_user.id,
-            username: &lowboy_user.username,
-            password: lowboy_user.password.as_deref(),
-            access_token: lowboy_user.access_token.as_deref(),
+            id: user.id,
+            username: &user.username,
+            password: user.password.as_deref(),
+            access_token: user.access_token.as_deref(),
         }
     }
 
@@ -458,7 +458,7 @@ impl<'a> UpdateLowboyUserRecord<'a> {
     }
 }
 
-impl LowboyUser {
+impl User {
     pub fn create_record(username: &str) -> CreateLowboyUserRecord {
         CreateLowboyUserRecord::new(username)
     }
@@ -468,7 +468,7 @@ impl LowboyUser {
     }
 
     pub fn update_record(&self) -> UpdateLowboyUserRecord {
-        UpdateLowboyUserRecord::from_lowboy_user(self)
+        UpdateLowboyUserRecord::from_user(self)
     }
 
     pub async fn delete_record(self, conn: &mut Connection) -> QueryResult<usize> {

@@ -16,7 +16,7 @@ use tokio_cron_scheduler::JobScheduler;
 use crate::auth::RegistrationDetails;
 use crate::config::Config;
 use crate::model::unverified_email::UnverifiedEmail;
-use crate::model::{LowboyUser, LowboyUserTrait};
+use crate::model::{LowboyUserTrait, User};
 use crate::{Connection, Events};
 
 type Result<T> = std::result::Result<T, Error>;
@@ -82,12 +82,12 @@ pub trait AppContext: Context + DynClone {
     where
         Self: Sized;
 
-    async fn on_new_user(&self, user: &LowboyUser, details: RegistrationDetails) -> Result<()> {
+    async fn on_new_user(&self, user: &User, details: RegistrationDetails) -> Result<()> {
         self.send_verification_email(user).await?;
         Ok(())
     }
 
-    async fn send_verification_email(&self, user: &LowboyUser) -> Result<()> {
+    async fn send_verification_email(&self, user: &User) -> Result<()> {
         if !user.email.verified {
             tracing::info!(
                 "Sending new user verification email to: {email}",

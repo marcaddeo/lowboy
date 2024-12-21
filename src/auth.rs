@@ -19,9 +19,7 @@ use password_auth::verify_password;
 use serde::{Deserialize, Serialize};
 use validator::Validate;
 
-use crate::model::{
-    CredentialKind, Credentials, LowboyUser, LowboyUserTrait, Model as _, Permission,
-};
+use crate::model::{CredentialKind, Credentials, LowboyUserTrait, Model as _, Permission, User};
 use crate::view::LowboyView;
 use crate::AppContext;
 
@@ -364,7 +362,7 @@ pub struct DiscordUserInfo {
 
 #[async_trait]
 impl AuthnBackend for LowboyAuth {
-    type User = LowboyUser;
+    type User = User;
     type Credentials = Credentials;
     type Error = Error;
 
@@ -381,7 +379,7 @@ impl AuthnBackend for LowboyAuth {
                     .password
                     .ok_or(Error::MissingCredential("password"))?;
                 let Some(user) =
-                    LowboyUser::find_by_username_having_password(&credentials.username, &mut conn)
+                    User::find_by_username_having_password(&credentials.username, &mut conn)
                         .await?
                 else {
                     return Ok(None);
@@ -435,37 +433,35 @@ impl AuthnBackend for LowboyAuth {
                 };
 
                 let access_token = token.secret();
-                let user = if let Some(mut user) =
-                    LowboyUser::find_by_username(username, &mut conn).await?
-                {
-                    // @note this caused some pain trying to figure out why i can't log back in
-                    // after logging out. we're returning the user model with the old token. leaving
-                    // this commented out here to figure out a better design later (never?? :D)
-                    // user.update_record()
-                    //     .with_access_token(access_token)
-                    //     .save(&mut conn)
-                    //     .await?;
-                    // user
+                let user =
+                    if let Some(mut user) = User::find_by_username(username, &mut conn).await? {
+                        // @note this caused some pain trying to figure out why i can't log back in
+                        // after logging out. we're returning the user model with the old token. leaving
+                        // this commented out here to figure out a better design later (never?? :D)
+                        // user.update_record()
+                        //     .with_access_token(access_token)
+                        //     .save(&mut conn)
+                        //     .await?;
+                        // user
 
-                    user.access_token = Some(access_token.to_owned());
-                    user.update_record().save(&mut conn).await?;
-                    user
-                } else {
-                    let user =
-                        LowboyUser::new(username, email, None, Some(access_token), &mut conn)
-                            .await?;
+                        user.access_token = Some(access_token.to_owned());
+                        user.update_record().save(&mut conn).await?;
+                        user
+                    } else {
+                        let user =
+                            User::new(username, email, None, Some(access_token), &mut conn).await?;
 
-                    self.context
-                        .on_new_user(&user, registration_details)
-                        .await
-                        .map_err(|e| {
-                            Error::AppError(format!(
-                                "there was an error executing on_new_user: {e}"
-                            ))
-                        })?;
+                        self.context
+                            .on_new_user(&user, registration_details)
+                            .await
+                            .map_err(|e| {
+                                Error::AppError(format!(
+                                    "there was an error executing on_new_user: {e}"
+                                ))
+                            })?;
 
-                    user
-                };
+                        user
+                    };
 
                 Ok(Some(user))
             }
@@ -477,7 +473,7 @@ impl AuthnBackend for LowboyAuth {
         user_id: &axum_login::UserId<Self>,
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
-        Ok(Some(LowboyUser::load(*user_id, &mut conn).await?))
+        Ok(Some(User::load(*user_id, &mut conn).await?))
     }
 }
 

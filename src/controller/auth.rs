@@ -20,8 +20,8 @@ use crate::context::CloneableAppContext;
 use crate::error::LowboyError;
 use crate::extract::DatabaseConnection;
 use crate::model::{
-    unverified_email::Error as VerificationError, CredentialKind, Credentials, LowboyUser,
-    OAuthCredentials, PasswordCredentials, UnverifiedEmail,
+    unverified_email::Error as VerificationError, CredentialKind, Credentials, OAuthCredentials,
+    PasswordCredentials, UnverifiedEmail, User,
 };
 use crate::{app, lowboy_view, AuthSession};
 
@@ -124,7 +124,7 @@ pub async fn register<App: app::App<AC>, AC: CloneableAppContext>(
     let mut conn = context.database().get().await?;
 
     let password = password_auth::generate_hash(input.password());
-    let user = LowboyUser::new(
+    let user = User::new(
         input.username(),
         input.email(),
         Some(&password),
