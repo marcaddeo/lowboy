@@ -28,13 +28,11 @@ impl Post {
 #[async_trait::async_trait]
 impl Model for Post {
     type RowSqlType = Self::Selection;
-
     type Selection = (
         AsSelect<PostRecord, Sqlite>,
         AsSelect<UserRecord, Sqlite>,
         AsSelect<LowboyUserRecord, Sqlite>,
     );
-
     type Query =
         Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
 

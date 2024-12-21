@@ -201,7 +201,6 @@ impl Model for LowboyUser {
             >,
         >,
     );
-
     type Selection = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
@@ -215,7 +214,6 @@ impl Model for LowboyUser {
             >,
         >,
     );
-
     type Query = Select<
         InnerJoin<
             InnerJoin<lowboy_user::table, email::table>,

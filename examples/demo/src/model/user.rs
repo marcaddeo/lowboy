@@ -64,12 +64,10 @@ impl Model for User {
         AsSelect<UserRecord, Sqlite>,
         <LowboyUser as Model>::RowSqlType,
     );
-
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
         <LowboyUser as Model>::Selection,
     );
-
     type Query = Select<
         InnerJoin<<LowboyUser as Model>::Query, user::table>,
         (
