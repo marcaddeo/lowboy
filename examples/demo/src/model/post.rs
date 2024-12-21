@@ -27,8 +27,6 @@ impl Post {
 
 #[async_trait::async_trait]
 impl Model for Post {
-    type Record = PostRecord;
-
     type RowSqlType = Self::Selection;
 
     type Selection = (

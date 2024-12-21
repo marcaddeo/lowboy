@@ -119,7 +119,6 @@ impl UnverifiedEmail {
 
 #[async_trait::async_trait]
 impl Model for UnverifiedEmail {
-    type Record = EmailRecord;
     type RowSqlType = Self::Selection;
     type Selection = (AsSelect<EmailRecord, Sqlite>, AsSelect<TokenRecord, Sqlite>);
     type Query = Select<

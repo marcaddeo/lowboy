@@ -27,7 +27,6 @@ impl Permission {
 
 #[async_trait::async_trait]
 impl Model for Permission {
-    type Record = PermissionRecord;
     type RowSqlType = Self::Selection;
     type Selection = (AsSelect<PermissionRecord, Sqlite>,);
     type Query = Select<permission::table, Self::Selection>;

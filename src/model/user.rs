@@ -2,7 +2,6 @@ use std::collections::HashSet;
 
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
-use diesel::associations::HasTable;
 use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Nullable, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::result::Error::{DeserializationError, NotFound};
@@ -185,8 +184,6 @@ define_sql_function! {
 
 #[async_trait::async_trait]
 impl Model for LowboyUser {
-    type Record = LowboyUserRecord;
-
     type RowSqlType = (
         AsSelect<LowboyUserRecord, Sqlite>,
         AsSelect<EmailRecord, Sqlite>,
@@ -231,13 +228,13 @@ impl Model for LowboyUser {
     >;
 
     fn query() -> Self::Query {
-        Self::Record::table()
+        lowboy_user::table
             .inner_join(email::table)
             .inner_join(user_role::table.inner_join(
                 role::table.left_join(role_permission::table.left_join(permission::table)),
             ))
             .select((
-                Self::Record::as_select(),
+                LowboyUserRecord::as_select(),
                 EmailRecord::as_select(),
                 json_group_array(role_record_json("id", role::id, "name", role::name)),
                 json_group_array(permission_record_json(

@@ -60,8 +60,6 @@ impl DemoUser for User {
 
 #[async_trait::async_trait]
 impl Model for User {
-    type Record = UserRecord;
-
     type RowSqlType = (
         AsSelect<UserRecord, Sqlite>,
         <LowboyUser as Model>::RowSqlType,

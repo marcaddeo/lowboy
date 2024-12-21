@@ -25,7 +25,6 @@ impl Token {
 
 #[async_trait::async_trait]
 impl Model for Token {
-    type Record = TokenRecord;
     type RowSqlType = Self::Selection;
     type Selection = (AsSelect<TokenRecord, Sqlite>,);
     type Query = Select<token::table, Self::Selection>;

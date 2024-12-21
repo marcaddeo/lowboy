@@ -56,7 +56,6 @@ impl Email {
 
 #[async_trait::async_trait]
 impl Model for Email {
-    type Record = EmailRecord;
     type RowSqlType = Self::Selection;
     type Selection = (AsSelect<EmailRecord, Sqlite>,);
     type Query = Select<email::table, Self::Selection>;

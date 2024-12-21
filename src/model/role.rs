@@ -52,7 +52,6 @@ impl Role {
 
 #[async_trait::async_trait]
 impl Model for Role {
-    type Record = RoleRecord;
     type RowSqlType = Self::Selection;
     type Selection = (AsSelect<RoleRecord, Sqlite>,);
     type Query = Select<role::table, Self::Selection>;

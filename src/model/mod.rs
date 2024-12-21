@@ -1,4 +1,3 @@
-use diesel::associations::HasTable;
 use diesel::query_builder::SelectQuery;
 use diesel::QueryResult;
 
@@ -22,7 +21,6 @@ pub use user::*;
 
 #[async_trait::async_trait]
 pub trait Model {
-    type Record: HasTable;
     type RowSqlType;
     type Selection;
     type Query: SelectQuery;
