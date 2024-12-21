@@ -1,20 +1,42 @@
+use std::collections::HashSet;
+
 use diesel::dsl::{AsSelect, InnerJoin, Select};
 use diesel::prelude::*;
 use diesel::query_dsl::CompatibleType;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{FromLowboyUser, LowboyUser, LowboyUserRecord, LowboyUserTrait, Model};
+use lowboy::model::{
+    AssumeNullIsNotFoundExtension as _, Email, FromLowboyUser, LowboyUser, LowboyUserRecord,
+    LowboyUserTrait, Model, Permission, Role, UserSelect,
+};
+use lowboy::schema::lowboy_user;
 use lowboy::Connection;
 
-use crate::schema::{lowboy_user, user};
+use crate::schema::user;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct User {
     pub id: i32,
     pub lowboy_user: LowboyUser,
     pub name: String,
     pub avatar: Option<String>,
     pub byline: Option<String>,
+}
+
+impl User {
+    pub fn is_authenticated(&self) -> bool {
+        self.lowboy_user
+            .roles()
+            .iter()
+            .any(|r| r.name == "authenticated")
+    }
+
+    pub fn has_permission(&self, permission: &str) -> bool {
+        self.lowboy_user
+            .permissions()
+            .iter()
+            .any(|p| p.name == permission)
+    }
 }
 
 pub trait DemoUser {
@@ -41,19 +63,22 @@ impl DemoUser for User {
 impl Model for User {
     type Record = UserRecord;
 
-    type RowSqlType = (user::SqlType, lowboy_user::SqlType);
+    type RowSqlType = (user::SqlType, <LowboyUser as Model>::RowSqlType);
 
     type Selection = (
         AsSelect<UserRecord, Sqlite>,
-        AsSelect<LowboyUserRecord, Sqlite>,
+        <LowboyUser as Model>::Selection,
     );
 
-    type Query = Select<InnerJoin<user::table, lowboy_user::table>, Self::Selection>;
+    type Query = Select<
+        InnerJoin<<LowboyUser as Model>::Query, user::table>,
+        (AsSelect<UserRecord, Sqlite>, UserSelect),
+    >;
 
     fn query() -> Self::Query {
-        user::table
-            .inner_join(lowboy_user::table)
-            .select((UserRecord::as_select(), LowboyUserRecord::as_select()))
+        LowboyUser::query()
+            .inner_join(user::table)
+            .select((UserRecord::as_select(), LowboyUser::query().select.0))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
@@ -72,15 +97,17 @@ impl CompatibleType<User, Sqlite> for <User as Model>::Selection {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (UserRecord, LowboyUserRecord);
+    type Row = (
+        UserRecord,
+        <LowboyUser as Queryable<<LowboyUser as Model>::RowSqlType, Sqlite>>::Row,
+    );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, lowboy_user_record) = row;
-        let lowboy_user = LowboyUser::build((lowboy_user_record,))?;
+        let (user_record, row) = row;
 
         Ok(Self {
             id: user_record.id,
-            lowboy_user,
+            lowboy_user: LowboyUser::build(row)?,
             name: user_record.name,
             avatar: user_record.avatar,
             byline: user_record.byline,
@@ -88,6 +115,7 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
     }
 }
 
+#[async_trait::async_trait]
 impl LowboyUserTrait for User {
     fn id(&self) -> i32 {
         self.id
@@ -97,16 +125,36 @@ impl LowboyUserTrait for User {
         &self.lowboy_user.username
     }
 
-    fn email(&self) -> &String {
+    fn email(&self) -> &Email {
         &self.lowboy_user.email
     }
 
-    fn password(&self) -> &Option<String> {
-        &self.lowboy_user.password
+    fn password(&self) -> Option<&String> {
+        self.lowboy_user.password.as_ref()
     }
 
-    fn access_token(&self) -> &Option<String> {
-        &self.lowboy_user.access_token
+    fn access_token(&self) -> Option<&String> {
+        self.lowboy_user.access_token.as_ref()
+    }
+
+    fn roles(&self) -> &HashSet<Role> {
+        &self.lowboy_user.roles
+    }
+
+    fn permissions(&self) -> &HashSet<Permission> {
+        &self.lowboy_user.permissions
+    }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
+    where
+        Self: Sized,
+    {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .first::<Self>(conn)
+            .await
+            .assume_null_is_not_found()
+            .optional()
     }
 }
 

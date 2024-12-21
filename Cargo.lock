@@ -418,6 +418,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "constant_time_eq"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7c74b8349d32d297c9134b8c88677813a227df8f779daa29bfc29c183fe3dca6"
+
+[[package]]
 name = "cookie"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -585,6 +591,7 @@ dependencies = [
  "deadpool",
  "deadpool-diesel",
  "derive-masked",
+ "derive-where",
  "derive_more",
  "diesel",
  "diesel-async",
@@ -633,6 +640,17 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca11c5b0a90dfc0a85824ddb2816881b396d8bec52d1cf42d2321c38a8d404a"
 dependencies = [
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "derive-where"
+version = "1.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "62d671cc41a825ebabc75757b62d3d168c577f9149b2d49ece1dad1f72119d25"
+dependencies = [
+ "proc-macro2",
  "quote",
  "syn",
 ]
@@ -1753,6 +1771,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "confique",
+ "constant_time_eq",
  "deadpool",
  "deadpool-diesel",
  "derive-masked",
@@ -1776,6 +1795,7 @@ dependencies = [
  "rinja_axum",
  "rmp-serde",
  "serde",
+ "serde_json",
  "strum",
  "thiserror 2.0.1",
  "tokio",
@@ -1788,6 +1808,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "typetag",
+ "uuid",
  "validator",
  "vergen-gitcl",
  "xdg",
@@ -2720,9 +2741,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.132"
+version = "1.0.133"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d726bfaff4b320266d395898905d0eba0345aae23b54aee3a737e260fd46db03"
+checksum = "c7fceb2473b9166b2294ef05efcb65a3db80803f0b03ef86a5fc88a2b85ee377"
 dependencies = [
  "itoa",
  "memchr",

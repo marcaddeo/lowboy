@@ -1,10 +1,10 @@
 use rinja::Template;
 
-use crate::model;
-use crate::model::DemoUser as _;
+use crate::model::{self, DemoUser, User};
 
 #[derive(Clone, Template)]
 #[template(path = "pages/home.html")]
 pub struct Home {
+    pub user: User,
     pub posts: Vec<model::Post>,
 }

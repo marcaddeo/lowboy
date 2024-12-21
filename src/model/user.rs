@@ -1,36 +1,88 @@
+use std::collections::HashSet;
+
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
 use diesel::associations::HasTable;
-use diesel::dsl::{AsSelect, Select};
+use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Nullable, Select, SqlTypeOf};
 use diesel::prelude::*;
-use diesel::query_dsl::CompatibleType;
+use diesel::result::Error::{DeserializationError, NotFound};
+use diesel::result::UnexpectedNullError;
+use diesel::sql_types::{Integer, Text};
 use diesel::sqlite::Sqlite;
-use diesel::upsert::excluded;
-use diesel::{insert_into, OptionalExtension, QueryResult, Selectable};
+use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
 
-use crate::schema::lowboy_user;
+use crate::schema::{email, lowboy_user, permission, role, role_permission, user_role};
 use crate::Connection;
 
-use super::Model;
+use super::{Email, EmailRecord, Model, Permission, Role, UnverifiedEmail};
 
-#[derive(Clone, Debug, Default)]
+// @note: don't really love this solution, but GROUP BY with diesel doesn't seem to be able to work
+// across crates so that's problematic.
+pub trait AssumeNullIsNotFoundExtension<T> {
+    fn assume_null_is_not_found(self) -> QueryResult<T>;
+}
+
+impl<T> AssumeNullIsNotFoundExtension<T> for QueryResult<T> {
+    fn assume_null_is_not_found(self) -> QueryResult<T> {
+        match self {
+            Ok(value) => Ok(value),
+            Err(DeserializationError(e)) if e.is::<UnexpectedNullError>() => {
+                tracing::debug!(
+                    "assuming null is not found for {type_name}: {e}",
+                    type_name = std::any::type_name::<T>()
+                );
+                Err(NotFound)
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct LowboyUser {
     pub id: i32,
     pub username: String,
-    pub email: String,
+    pub email: Email,
     pub password: Option<String>,
     pub access_token: Option<String>,
+    pub roles: HashSet<Role>,
+    pub permissions: HashSet<Permission>,
 }
 
 impl LowboyUser {
-    pub async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(lowboy_user::username.eq(username))
-            .first::<Self>(conn)
-            .await
+    pub async fn new(
+        username: &str,
+        email: &str,
+        password: Option<&str>,
+        access_token: Option<&str>,
+        conn: &mut Connection,
+    ) -> QueryResult<Self> {
+        conn.transaction(|conn| {
+            async move {
+                let user = CreateLowboyUserRecord {
+                    username,
+                    password,
+                    access_token,
+                }
+                .save(conn)
+                .await?;
+
+                UnverifiedEmail::new(user.id, email, conn).await?;
+
+                Role::find_by_name("unverified", conn)
+                    .await?
+                    .expect("unverified role should exist")
+                    .assign(user.id, conn)
+                    .await?;
+
+                <Self as Model>::load(user.id, conn).await
+            }
+            .scope_boxed()
+        })
+        .await
     }
 
     pub async fn find_by_username_having_password(
@@ -42,18 +94,22 @@ impl LowboyUser {
             .filter(lowboy_user::password.is_not_null())
             .first::<Self>(conn)
             .await
+            .assume_null_is_not_found()
             .optional()
     }
 }
 
+#[async_trait::async_trait]
 pub trait LowboyUserTrait: Model + FromLowboyUser {
     fn id(&self) -> i32;
     fn username(&self) -> &String;
-    fn email(&self) -> &String;
-    fn password(&self) -> &Option<String>;
-    fn access_token(&self) -> &Option<String>;
+    fn email(&self) -> &Email;
+    fn password(&self) -> Option<&String>;
+    fn access_token(&self) -> Option<&String>;
+    fn roles(&self) -> &HashSet<Role>;
+    fn permissions(&self) -> &HashSet<Permission>;
     fn gravatar(&self) -> String {
-        gravatars::Avatar::builder(self.email())
+        gravatars::Avatar::builder(&self.email().address)
             .size(256)
             .default(gravatars::Default::MysteryPerson)
             .rating(gravatars::Rating::Pg)
@@ -61,8 +117,13 @@ pub trait LowboyUserTrait: Model + FromLowboyUser {
             .image_url()
             .to_string()
     }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
+    where
+        Self: Sized;
 }
 
+#[async_trait::async_trait]
 impl LowboyUserTrait for LowboyUser {
     fn id(&self) -> i32 {
         self.id
@@ -72,31 +133,139 @@ impl LowboyUserTrait for LowboyUser {
         &self.username
     }
 
-    fn email(&self) -> &String {
+    fn email(&self) -> &Email {
         &self.email
     }
 
-    fn password(&self) -> &Option<String> {
-        &self.password
+    fn password(&self) -> Option<&String> {
+        self.password.as_ref()
     }
 
-    fn access_token(&self) -> &Option<String> {
-        &self.access_token
+    fn access_token(&self) -> Option<&String> {
+        self.access_token.as_ref()
+    }
+
+    fn roles(&self) -> &HashSet<Role> {
+        &self.roles
+    }
+
+    fn permissions(&self) -> &HashSet<Permission> {
+        &self.permissions
+    }
+
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
+        Self::query()
+            .filter(lowboy_user::username.eq(username))
+            .first::<Self>(conn)
+            .await
+            .assume_null_is_not_found()
+            .optional()
     }
 }
+
+define_sql_function! {
+    fn group_concat(val: Text, separator: Text) -> Text;
+}
+
+define_sql_function! {
+    fn json_group_array(val: Text) -> Text;
+}
+
+// @TODO i believe Diesel will be adding general support for json_object eventually, so this should
+// be a temporary solution
+define_sql_function! {
+    #[sql_name = "json_object"]
+    fn role_record_json(a: Text, b: Integer, c: Text, d: Text) -> Text;
+}
+
+define_sql_function! {
+    #[sql_name = "json_object"]
+    fn permission_record_json(a: Text, b: diesel::sql_types::Nullable<Integer>, c: Text, d: diesel::sql_types::Nullable<Text>) -> Text;
+}
+
+// @TODO need to refactor Model trait
+pub type UserSelect = (
+    AsSelect<LowboyUserRecord, Sqlite>,
+    AsSelect<EmailRecord, Sqlite>,
+    json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+    json_group_array<
+        permission_record_json<
+            &'static str,
+            Nullable<permission::id>,
+            &'static str,
+            Nullable<permission::name>,
+        >,
+    >,
+);
 
 #[async_trait::async_trait]
 impl Model for LowboyUser {
     type Record = LowboyUserRecord;
 
-    type RowSqlType = (lowboy_user::SqlType,);
+    type RowSqlType = (
+        AsSelect<LowboyUserRecord, Sqlite>,
+        AsSelect<EmailRecord, Sqlite>,
+        SqlTypeOf<
+            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+        >,
+        SqlTypeOf<
+            json_group_array<
+                permission_record_json<
+                    &'static str,
+                    Nullable<permission::id>,
+                    &'static str,
+                    Nullable<permission::name>,
+                >,
+            >,
+        >,
+    );
 
-    type Selection = (AsSelect<LowboyUserRecord, Sqlite>,);
+    type Selection = (
+        AsSelect<LowboyUserRecord, Sqlite>,
+        AsSelect<EmailRecord, Sqlite>,
+        SqlTypeOf<
+            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
+        >,
+        SqlTypeOf<
+            json_group_array<
+                permission_record_json<
+                    &'static str,
+                    Nullable<permission::id>,
+                    &'static str,
+                    Nullable<permission::name>,
+                >,
+            >,
+        >,
+    );
 
-    type Query = Select<lowboy_user::table, Self::Selection>;
+    type Query = Select<
+        InnerJoin<
+            InnerJoin<lowboy_user::table, email::table>,
+            InnerJoin<
+                user_role::table,
+                LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
+            >,
+        >,
+        UserSelect,
+    >;
 
     fn query() -> Self::Query {
-        Self::Record::table().select((Self::Record::as_select(),))
+        Self::Record::table()
+            .inner_join(email::table)
+            .inner_join(user_role::table.inner_join(
+                role::table.left_join(role_permission::table.left_join(permission::table)),
+            ))
+            .select((
+                Self::Record::as_select(),
+                EmailRecord::as_select(),
+                json_group_array(role_record_json("id", role::id, "name", role::name)),
+                json_group_array(permission_record_json(
+                    "id",
+                    permission::id.nullable(),
+                    "name",
+                    permission::name.nullable(),
+                )),
+            ))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
@@ -110,22 +279,24 @@ impl Model for LowboyUser {
     }
 }
 
-impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
-    type SqlType = <LowboyUser as Model>::RowSqlType;
-}
+// impl CompatibleType<LowboyUser, Sqlite> for <LowboyUser as Model>::Selection {
+//     type SqlType = <LowboyUser as Model>::RowSqlType;
+// }
 
 impl Queryable<<LowboyUser as Model>::RowSqlType, Sqlite> for LowboyUser {
-    type Row = (LowboyUserRecord,);
+    type Row = (LowboyUserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (lowboy_user_record,) = row;
+        let (lowboy_user_record, email_record, roles, permissions) = row;
 
         Ok(Self {
             id: lowboy_user_record.id,
             username: lowboy_user_record.username,
-            email: lowboy_user_record.email,
+            email: email_record.into(),
             password: lowboy_user_record.password,
             access_token: lowboy_user_record.access_token,
+            roles: serde_json::from_str(&roles).unwrap_or_default(),
+            permissions: serde_json::from_str(&permissions).unwrap_or_default(),
         })
     }
 }
@@ -143,61 +314,7 @@ impl FromLowboyUser for LowboyUser {
     where
         Self: Sized,
     {
-        let user = user.clone();
-        Ok(Self {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-            password: user.password,
-            access_token: user.access_token,
-        })
-    }
-}
-
-#[derive(PartialEq)]
-pub enum Operation {
-    Create = 0,
-    Update = 1,
-}
-
-impl From<i64> for Operation {
-    fn from(value: i64) -> Self {
-        match value {
-            0 => Self::Create,
-            1 => Self::Update,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl<'a> CreateLowboyUserRecord<'a> {
-    pub async fn save_or_update(
-        &self,
-        conn: &mut Connection,
-    ) -> QueryResult<(LowboyUserRecord, Operation)> {
-        conn.transaction::<_, diesel::result::Error, _>(|conn| {
-            async move {
-                // @TODO can we do this in one query..?
-                let operation = LowboyUser::query()
-                    .filter(lowboy_user::username.eq(self.username))
-                    .count()
-                    .get_result::<i64>(conn)
-                    .await
-                    .map(Operation::from)?;
-
-                let user: LowboyUserRecord = insert_into(lowboy_user::table)
-                    .values(self)
-                    .on_conflict(lowboy_user::email)
-                    .do_update()
-                    .set(lowboy_user::access_token.eq(excluded(lowboy_user::access_token)))
-                    .get_result(conn)
-                    .await?;
-
-                Ok((user, operation))
-            }
-            .scope_boxed()
-        })
-        .await
+        Ok(user.clone())
     }
 }
 
@@ -228,14 +345,13 @@ impl AuthUser for LowboyUser {
 pub struct LowboyUserRecord {
     pub id: i32,
     pub username: String,
-    pub email: String,
     pub password: Option<String>,
     pub access_token: Option<String>,
 }
 
 impl LowboyUserRecord {
-    pub fn create<'a>(username: &'a str, email: &'a str) -> CreateLowboyUserRecord<'a> {
-        CreateLowboyUserRecord::new(username, email)
+    pub fn create(username: &str) -> CreateLowboyUserRecord {
+        CreateLowboyUserRecord::new(username)
     }
 
     pub async fn read(id: i32, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {
@@ -259,7 +375,6 @@ impl From<LowboyUser> for LowboyUserRecord {
         Self {
             id: value.id,
             username: value.username,
-            email: value.email,
             password: value.password,
             access_token: value.access_token,
         }
@@ -271,17 +386,15 @@ impl From<LowboyUser> for LowboyUserRecord {
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct CreateLowboyUserRecord<'a> {
     pub username: &'a str,
-    pub email: &'a str,
     pub password: Option<&'a str>,
     pub access_token: Option<&'a str>,
 }
 
 impl<'a> CreateLowboyUserRecord<'a> {
     /// Create a new `NewLowboyUserRecord` object
-    pub fn new(username: &'a str, email: &'a str) -> CreateLowboyUserRecord<'a> {
+    pub fn new(username: &'a str) -> CreateLowboyUserRecord<'a> {
         Self {
             username,
-            email,
             ..Default::default()
         }
     }
@@ -316,7 +429,6 @@ impl<'a> CreateLowboyUserRecord<'a> {
 pub struct UpdateLowboyUserRecord<'a> {
     pub id: i32,
     pub username: &'a str,
-    pub email: &'a str,
     pub password: Option<&'a str>,
     pub access_token: Option<&'a str>,
 }
@@ -333,7 +445,6 @@ impl<'a> UpdateLowboyUserRecord<'a> {
         Self {
             id: lowboy_user.id,
             username: &lowboy_user.username,
-            email: &lowboy_user.email,
             password: lowboy_user.password.as_deref(),
             access_token: lowboy_user.access_token.as_deref(),
         }
@@ -343,7 +454,6 @@ impl<'a> UpdateLowboyUserRecord<'a> {
         Self {
             id: record.id,
             username: &record.username,
-            email: &record.email,
             password: record.password.as_deref(),
             access_token: record.access_token.as_deref(),
         }
@@ -351,10 +461,6 @@ impl<'a> UpdateLowboyUserRecord<'a> {
 
     pub fn with_username(self, username: &'a str) -> Self {
         Self { username, ..self }
-    }
-
-    pub fn with_email(self, email: &'a str) -> Self {
-        Self { email, ..self }
     }
 
     pub fn with_password(self, password: &'a str) -> Self {
@@ -381,8 +487,8 @@ impl<'a> UpdateLowboyUserRecord<'a> {
 }
 
 impl LowboyUser {
-    pub fn create_record<'a>(username: &'a str, email: &'a str) -> CreateLowboyUserRecord<'a> {
-        CreateLowboyUserRecord::new(username, email)
+    pub fn create_record(username: &str) -> CreateLowboyUserRecord {
+        CreateLowboyUserRecord::new(username)
     }
 
     pub async fn read_record(id: i32, conn: &mut Connection) -> QueryResult<LowboyUserRecord> {

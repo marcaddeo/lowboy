@@ -12,7 +12,7 @@ use tokio_cron_scheduler::JobScheduler;
 use crate::controller;
 use crate::form::RegisterForm;
 use crate::model::User;
-use crate::view::auth::{Login, Register};
+use crate::view::auth::{EmailVerification, Login, Register};
 use crate::view::{self, Layout};
 
 #[derive(Clone)]
@@ -44,9 +44,13 @@ impl AppContext for DemoContext {
 
     async fn on_new_user(
         &self,
-        record: &LowboyUser,
+        user: &LowboyUser,
         details: RegistrationDetails,
     ) -> Result<(), context::Error> {
+        // Ensure new user email verification is sent.
+        // @TODO this is going to get refactored
+        self.send_verification_email(user).await?;
+
         let mut conn = self.database.get().await?;
         let (name, avatar) = match details {
             RegistrationDetails::Local(form) => {
@@ -71,7 +75,7 @@ impl AppContext for DemoContext {
                 }),
             ),
         };
-        let mut record = User::create_record(record.id, &name);
+        let mut record = User::create_record(user.id, &name);
 
         if let Some(avatar) = avatar.as_deref() {
             record = record.with_avatar(avatar);
@@ -106,6 +110,7 @@ impl App<DemoContext> for Demo {
     type Layout = Layout<Self::User>;
     type ErrorView = view::Error;
     type RegisterView = Register<Self::RegistrationForm>;
+    type EmailVerificationView = EmailVerification;
     type LoginView = Login<Self::LoginForm>;
     type User = User;
     type RegistrationForm = RegisterForm;
