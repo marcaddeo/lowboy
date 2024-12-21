@@ -99,7 +99,7 @@ impl User {
 }
 
 #[async_trait::async_trait]
-pub trait LowboyUserTrait: Model + FromLowboyUser {
+pub trait LowboyUserTrait: Model {
     fn id(&self) -> i32;
     fn username(&self) -> &String;
     fn email(&self) -> &Email;
@@ -270,23 +270,6 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
             roles: serde_json::from_str(&roles).unwrap_or_default(),
             permissions: serde_json::from_str(&permissions).unwrap_or_default(),
         })
-    }
-}
-
-#[async_trait::async_trait]
-pub trait FromLowboyUser {
-    async fn from_lowboy_user(user: &User, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized;
-}
-
-#[async_trait::async_trait]
-impl FromLowboyUser for User {
-    async fn from_lowboy_user(user: &User, _conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized,
-    {
-        Ok(user.clone())
     }
 }
 

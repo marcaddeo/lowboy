@@ -10,7 +10,7 @@ use dyn_clone::DynClone;
 use crate::auth::AuthSession;
 use crate::context::CloneableAppContext;
 use crate::error::{ErrorWrapper, LowboyError, LowboyErrorView};
-use crate::model::{FromLowboyUser as _, LowboyUserTrait};
+use crate::model::{LowboyUserTrait, Model};
 use crate::{app, lowboy_view};
 
 pub async fn error_page<App: app::App<AC>, AC: CloneableAppContext>(
@@ -69,7 +69,7 @@ pub async fn render_view<App: app::App<AC>, AC: CloneableAppContext>(
             user: Some(user), ..
         }) = auth_session
         {
-            Some(App::User::from_lowboy_user(&user, &mut conn).await?)
+            Some(<App::User as Model>::load(user.id, &mut conn).await?)
         } else {
             None
         };
