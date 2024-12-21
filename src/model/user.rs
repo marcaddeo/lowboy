@@ -13,7 +13,7 @@ use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
 
-use crate::schema::{email, lowboy_user, permission, role, role_permission, user_role};
+use crate::schema::{email, permission, role, role_permission, user, user_role};
 use crate::Connection;
 
 use super::{Email, EmailRecord, Model, Permission, Role, UnverifiedEmail};
@@ -89,8 +89,8 @@ impl User {
         conn: &mut Connection,
     ) -> QueryResult<Option<Self>> {
         Self::query()
-            .filter(lowboy_user::username.eq(username))
-            .filter(lowboy_user::password.is_not_null())
+            .filter(user::username.eq(username))
+            .filter(user::password.is_not_null())
             .first::<Self>(conn)
             .await
             .assume_null_is_not_found()
@@ -154,7 +154,7 @@ impl LowboyUserTrait for User {
 
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
         Self::query()
-            .filter(lowboy_user::username.eq(username))
+            .filter(user::username.eq(username))
             .first::<Self>(conn)
             .await
             .assume_null_is_not_found()
@@ -216,7 +216,7 @@ impl Model for User {
     );
     type Query = Select<
         InnerJoin<
-            InnerJoin<lowboy_user::table, email::table>,
+            InnerJoin<user::table, email::table>,
             InnerJoin<
                 user_role::table,
                 LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
@@ -226,7 +226,7 @@ impl Model for User {
     >;
 
     fn query() -> Self::Query {
-        lowboy_user::table
+        user::table
             .inner_join(email::table)
             .inner_join(user_role::table.inner_join(
                 role::table.left_join(role_permission::table.left_join(permission::table)),
@@ -249,7 +249,7 @@ impl Model for User {
         Self: Sized,
     {
         Self::query()
-            .filter(lowboy_user::id.eq(id))
+            .filter(user::id.eq(id))
             .first::<Self>(conn)
             .await
     }
@@ -312,7 +312,7 @@ impl AuthUser for User {
 
 // @note the rest of this file is to eventually be generated using lowboy_record!
 #[derive(Clone, DebugMasked, Default, Queryable, Selectable, AsChangeset, Identifiable)]
-#[diesel(table_name = crate::schema::lowboy_user)]
+#[diesel(table_name = crate::schema::user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct UserRecord {
     pub id: i32,
@@ -327,7 +327,7 @@ impl UserRecord {
     }
 
     pub async fn read(id: i32, conn: &mut Connection) -> QueryResult<UserRecord> {
-        lowboy_user::table.find(id).get_result(conn).await
+        user::table.find(id).get_result(conn).await
     }
 
     pub fn update(&self) -> UpdateUserRecord {
@@ -335,7 +335,7 @@ impl UserRecord {
     }
 
     pub async fn delete(&self, conn: &mut Connection) -> QueryResult<usize> {
-        diesel::delete(lowboy_user::table.find(self.id))
+        diesel::delete(user::table.find(self.id))
             .execute(conn)
             .await
     }
@@ -354,7 +354,7 @@ impl From<User> for UserRecord {
 }
 
 #[derive(Debug, Default, Insertable)]
-#[diesel(table_name = crate::schema::lowboy_user)]
+#[diesel(table_name = crate::schema::user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct CreateUserRecord<'a> {
     pub username: &'a str,
@@ -385,16 +385,16 @@ impl<'a> CreateUserRecord<'a> {
     }
 
     pub async fn save(&self, conn: &mut Connection) -> QueryResult<UserRecord> {
-        diesel::insert_into(crate::schema::lowboy_user::table)
+        diesel::insert_into(crate::schema::user::table)
             .values(self)
-            .returning(crate::schema::lowboy_user::table::all_columns())
+            .returning(crate::schema::user::table::all_columns())
             .get_result(conn)
             .await
     }
 }
 
 #[derive(Debug, Default, Identifiable, AsChangeset)]
-#[diesel(table_name = crate::schema::lowboy_user)]
+#[diesel(table_name = crate::schema::user)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct UpdateUserRecord<'a> {
     pub id: i32,
@@ -450,7 +450,7 @@ impl<'a> UpdateUserRecord<'a> {
     pub async fn save(&self, conn: &mut Connection) -> QueryResult<UserRecord> {
         diesel::update(self)
             .set(self)
-            .returning(crate::schema::lowboy_user::all_columns)
+            .returning(crate::schema::user::all_columns)
             .get_result(conn)
             .await
     }

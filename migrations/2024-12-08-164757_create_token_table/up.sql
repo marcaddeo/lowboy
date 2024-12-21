@@ -4,5 +4,5 @@ CREATE TABLE IF NOT EXISTS token (
     user_id INTEGER NOT NULL,
     secret TEXT NOT NULL,
     expiration DATETIME NOT NULL,
-    FOREIGN KEY(user_id) REFERENCES lowboy_user(id)
+    FOREIGN KEY(user_id) REFERENCES user(id)
 );

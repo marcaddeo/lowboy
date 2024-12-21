@@ -1,7 +1,7 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    lowboy_user (id) {
+    user (id) {
         id -> Integer,
         username -> Text,
         password -> Nullable<Text>,
@@ -55,16 +55,16 @@ diesel::table! {
     }
 }
 
-diesel::joinable!(email -> lowboy_user (user_id));
-diesel::joinable!(token -> lowboy_user (user_id));
+diesel::joinable!(email -> user (user_id));
+diesel::joinable!(token -> user (user_id));
 diesel::joinable!(role_permission -> permission (permission_id));
 diesel::joinable!(role_permission -> role (role_id));
-diesel::joinable!(user_role -> lowboy_user (user_id));
+diesel::joinable!(user_role -> user (user_id));
 diesel::joinable!(user_role -> role (role_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     email,
-    lowboy_user,
+    user,
     permission,
     role,
     role_permission,
