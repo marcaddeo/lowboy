@@ -6,7 +6,7 @@ use lowboy::model::{Model, UserModel, UserRecord};
 use lowboy::Connection;
 
 use crate::model::{User, UserProfileRecord};
-use crate::schema::{lowboy_user, post, user_profile};
+use crate::schema::{post, user, user_profile};
 
 #[derive(Clone, Debug)]
 pub struct Post {
@@ -34,13 +34,13 @@ impl Model for Post {
         AsSelect<UserRecord, Sqlite>,
     );
     type Query = Select<
-        InnerJoin<post::table, InnerJoin<user_profile::table, lowboy_user::table>>,
+        InnerJoin<post::table, InnerJoin<user_profile::table, user::table>>,
         Self::Selection,
     >;
 
     fn query() -> Self::Query {
         post::table
-            .inner_join(user_profile::table.inner_join(lowboy_user::table))
+            .inner_join(user_profile::table.inner_join(user::table))
             .select((
                 PostRecord::as_select(),
                 UserProfileRecord::as_select(),
