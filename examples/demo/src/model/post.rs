@@ -60,16 +60,18 @@ impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
     type Row = (PostRecord, UserProfileRecord, UserRecord);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user_record, lowboy_user_record) = row;
+        let (post_record, user_profile_record, user_record) = row;
         let user = User::build((
-            user_record,
+            user_profile_record,
             (
-                lowboy_user_record,
-                // Post does not need to know about these user details, so we can just use defaults.
-                // @TODO probably going to change this up later anyway.
-                Default::default(),
-                Default::default(),
-                Default::default(),
+                UserRecord {
+                    access_token: None,
+                    password: None,
+                    ..user_record
+                },
+                Default::default(), // EmailRecord
+                Default::default(), // Vec<role_record_json>
+                Default::default(), // Vec<permission_record_json>
             ),
         ))?;
 
