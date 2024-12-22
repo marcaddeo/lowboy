@@ -1,11 +1,12 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Select};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{Model, UserModel, UserRecord};
+use lowboy::schema::{email, permission, role, role_permission, user_role};
 use lowboy::Connection;
 
-use crate::model::{User, UserProfileRecord};
+use crate::model::User;
 use crate::schema::{post, user, user_profile};
 
 #[derive(Clone, Debug)]
@@ -20,60 +21,52 @@ impl Post {
         Post::query()
             .limit(limit.unwrap_or(100))
             .order_by(post::id.desc())
-            .load::<Post>(conn)
+            .load(conn)
             .await
     }
 }
 
 #[async_trait::async_trait]
 impl Model for Post {
-    type RowSqlType = Self::Selection;
-    type Selection = (
-        AsSelect<PostRecord, Sqlite>,
-        AsSelect<UserProfileRecord, Sqlite>,
-        AsSelect<UserRecord, Sqlite>,
-    );
+    type RowSqlType = (AsSelect<PostRecord, Sqlite>, <User as Model>::RowSqlType);
+    type Selection = (AsSelect<PostRecord, Sqlite>, <User as Model>::Selection);
     type Query = Select<
-        InnerJoin<post::table, InnerJoin<user_profile::table, user::table>>,
+        InnerJoin<
+            InnerJoin<post::table, user_profile::table>,
+            InnerJoin<
+                InnerJoin<user::table, email::table>,
+                InnerJoin<
+                    user_role::table,
+                    LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
+                >,
+            >,
+        >,
         Self::Selection,
     >;
 
     fn query() -> Self::Query {
         post::table
-            .inner_join(user_profile::table.inner_join(user::table))
-            .select((
-                PostRecord::as_select(),
-                UserProfileRecord::as_select(),
-                UserRecord::as_select(),
+            // .with_user()
+            .inner_join(user_profile::table)
+            .inner_join(user::table.inner_join(email::table).inner_join(
+                user_role::table.inner_join(
+                    role::table.left_join(role_permission::table.left_join(permission::table)),
+                ),
             ))
+            // end
+            .select((PostRecord::as_select(), User::construct_selection()))
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(post::id.eq(id))
-            .first::<Post>(conn)
-            .await
+        Self::query().filter(post::id.eq(id)).first(conn).await
     }
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, UserProfileRecord, UserRecord);
+    type Row = (PostRecord, User);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user_profile_record, user_record) = row;
-        let user = User::build((
-            user_profile_record,
-            (
-                UserRecord {
-                    access_token: None,
-                    password: None,
-                    ..user_record
-                },
-                Default::default(), // EmailRecord
-                Default::default(), // Vec<role_record_json>
-                Default::default(), // Vec<permission_record_json>
-            ),
-        ))?;
+        let (post_record, user) = row;
 
         Ok(Self {
             id: post_record.id,

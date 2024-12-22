@@ -51,42 +51,39 @@ impl Model for User {
         AsSelect<UserProfileRecord, Sqlite>,
         <LowboyUser as Model>::Selection,
     );
-    type Query = Select<
-        InnerJoin<<LowboyUser as Model>::Query, user_profile::table>,
-        (
-            AsSelect<UserProfileRecord, Sqlite>,
-            <LowboyUser as Model>::Selection,
-        ),
-    >;
+    type Query =
+        Select<InnerJoin<<LowboyUser as Model>::Query, user_profile::table>, Self::Selection>;
 
     fn query() -> Self::Query {
         LowboyUser::query()
             .inner_join(user_profile::table)
-            .select((UserProfileRecord::as_select(), LowboyUser::query().select.0))
+            .select(Self::construct_selection())
     }
 
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized,
-    {
-        Self::query()
-            .filter(user::id.eq(id))
-            .first::<Self>(conn)
-            .await
+    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        Self::query().filter(user::id.eq(id)).first(conn).await
+    }
+}
+
+impl Selectable<Sqlite> for User {
+    type SelectExpression = <Self as Model>::Selection;
+
+    fn construct_selection() -> Self::SelectExpression {
+        (
+            UserProfileRecord::as_select(),
+            LowboyUser::construct_selection(),
+        )
     }
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (
-        UserProfileRecord,
-        <LowboyUser as Queryable<<LowboyUser as Model>::RowSqlType, Sqlite>>::Row,
-    );
+    type Row = (UserProfileRecord, LowboyUser);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (profile_record, row) = row;
+        let (profile_record, user) = row;
 
         Ok(Self {
-            user: LowboyUser::build(row)?,
+            user,
             profile: profile_record,
         })
     }
@@ -128,7 +125,7 @@ impl UserModel for User {
     {
         Self::query()
             .filter(user::username.eq(username))
-            .first::<Self>(conn)
+            .first(conn)
             .await
             .assume_null_is_not_found()
             .optional()

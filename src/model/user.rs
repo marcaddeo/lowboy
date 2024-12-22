@@ -91,7 +91,7 @@ impl User {
         Self::query()
             .filter(user::username.eq(username))
             .filter(user::password.is_not_null())
-            .first::<Self>(conn)
+            .first(conn)
             .await
             .assume_null_is_not_found()
             .optional()
@@ -239,31 +239,35 @@ impl Model for User {
             .inner_join(user_role::table.inner_join(
                 role::table.left_join(role_permission::table.left_join(permission::table)),
             ))
-            .select((
-                UserRecord::as_select(),
-                EmailRecord::as_select(),
-                json_group_array(role_record_json("id", role::id, "name", role::name)),
-                json_group_array(permission_record_json(
-                    "id",
-                    permission::id.nullable(),
-                    "name",
-                    permission::name.nullable(),
-                )),
-            ))
+            .select(Self::construct_selection())
     }
 
-    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self>
-    where
-        Self: Sized,
-    {
-        Self::query()
-            .filter(user::id.eq(id))
-            .first::<Self>(conn)
-            .await
+    async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
+        Self::query().filter(user::id.eq(id)).first(conn).await
+    }
+}
+
+impl Selectable<Sqlite> for User {
+    type SelectExpression = <Self as Model>::Selection;
+
+    fn construct_selection() -> Self::SelectExpression {
+        (
+            UserRecord::as_select(),
+            EmailRecord::as_select(),
+            json_group_array(role_record_json("id", role::id, "name", role::name)),
+            json_group_array(permission_record_json(
+                "id",
+                permission::id.nullable(),
+                "name",
+                permission::name.nullable(),
+            )),
+        )
     }
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
+    // @TODO EmailRecord -> Email
+    // String/String -> Role/Permission?
     type Row = (UserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
