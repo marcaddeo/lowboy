@@ -2,6 +2,7 @@ use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
+use lowboy::model::AssumeNullIsNotFoundExtension as _;
 use lowboy::model::{Model, UserModel, UserRecord};
 use lowboy::Connection;
 
@@ -19,11 +20,31 @@ pub struct Post {
 
 impl Post {
     pub async fn list(conn: &mut Connection, limit: Option<i64>) -> QueryResult<Vec<Self>> {
-        Post::query()
+        // @TODO this isn't very nice that we have to use .assume_null_is_not_found() on anything
+        // that touches the user model. This is because of how we're loading roles/permissions via
+        // json_object/json_group_array. If no users are found in query, it returns a row of nulls
+        // and two empty json arrays ([], []) causing the deserialization to fail because it's not
+        // expecting null values. This can be fixed by using a GROUP BY clause on the query,
+        // however doing so across crates doesn't seem to be possible with Diesel... Not sure if
+        // it's something that can even be fixed, because really it's the orphan rule that prevents
+        // this from being possible unless Diesel can implement type safety for groups in a
+        // different way. Possibly worth asking. Another way around it is to just not use aggregate
+        // functions in the user model, and just have the `.roles()` and `.permissions()` methods
+        // have to hit the database as a separate query. Permisisons likely need to be checked more
+        // than once during the request lifecycle so having to hit the database each time is not
+        // ideal... so if we go that route we're also going to need to figure out some sort of
+        // caching solution for models now, and ensuring that cache can be invalidated e.g. when a
+        // new role is added to a user or a new permission is added to a role.
+        let posts = Post::query()
             .limit(limit.unwrap_or(100))
             .order_by(post::id.desc())
             .load(conn)
             .await
+            .assume_null_is_not_found()
+            .optional()?
+            .unwrap_or_default();
+
+        Ok(posts)
     }
 }
 
