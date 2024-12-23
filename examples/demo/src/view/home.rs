@@ -1,3 +1,4 @@
+use lowboy::model::UserModel as _;
 use rinja::Template;
 
 use crate::model::{self, DemoUser, User};

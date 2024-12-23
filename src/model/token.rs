@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use constant_time_eq::constant_time_eq;
-use diesel::dsl::{AsSelect, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 
-use crate::model::{LowboyUserRecord, Model};
+use crate::model::{Model, UserRecord};
 use crate::schema::token;
 use crate::Connection;
 
@@ -23,14 +23,33 @@ impl Token {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn token_from_clause() -> _ {
+    token::table
+}
+
+#[diesel::dsl::auto_type]
+fn token_select_clause() -> _ {
+    ((token::id, token::user_id, token::secret, token::expiration),)
+}
+
 #[async_trait::async_trait]
 impl Model for Token {
-    type RowSqlType = Self::Selection;
-    type Selection = (AsSelect<TokenRecord, Sqlite>,);
-    type Query = Select<token::table, Self::Selection>;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = token_select_clause;
+    type FromClause = token_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        token::table.select((TokenRecord::as_select(),))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        token_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        token_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -39,6 +58,14 @@ impl Model for Token {
             .filter(token::id.eq(id))
             .first::<Self>(conn)
             .await
+    }
+}
+
+impl Selectable<Sqlite> for Token {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 
@@ -60,7 +87,7 @@ impl Queryable<<Token as Model>::RowSqlType, Sqlite> for Token {
 // @note the rest of this file is to eventually be generated using lowboy_record!
 #[derive(Debug, Default, Queryable, Identifiable, Selectable, Insertable, Associations)]
 #[diesel(table_name = crate::schema::token)]
-#[diesel(belongs_to(LowboyUserRecord, foreign_key = user_id))]
+#[diesel(belongs_to(UserRecord, foreign_key = user_id))]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct TokenRecord {
     pub id: i32,

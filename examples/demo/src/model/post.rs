@@ -1,12 +1,14 @@
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{LowboyUserRecord, Model};
+use lowboy::model::{Model, UserModel, UserRecord};
 use lowboy::Connection;
 
-use crate::model::{User, UserRecord};
-use crate::schema::{lowboy_user, post, user};
+use crate::model::User;
+use crate::schema::post;
+
+use super::{user_from_clause, user_select_clause};
 
 #[derive(Clone, Debug)]
 pub struct Post {
@@ -20,60 +22,73 @@ impl Post {
         Post::query()
             .limit(limit.unwrap_or(100))
             .order_by(post::id.desc())
-            .load::<Post>(conn)
+            .load(conn)
             .await
     }
+}
+
+#[diesel::dsl::auto_type]
+fn post_from_clause() -> _ {
+    post::table.inner_join(user_from_clause())
+}
+
+#[diesel::dsl::auto_type]
+fn post_select_clause() -> _ {
+    (
+        (post::id, post::user_id, post::content),
+        user_select_clause(),
+    )
 }
 
 #[async_trait::async_trait]
 impl Model for Post {
-    type RowSqlType = Self::Selection;
-    type Selection = (
-        AsSelect<PostRecord, Sqlite>,
-        AsSelect<UserRecord, Sqlite>,
-        AsSelect<LowboyUserRecord, Sqlite>,
-    );
-    type Query =
-        Select<InnerJoin<post::table, InnerJoin<user::table, lowboy_user::table>>, Self::Selection>;
+    // @note changing this RowSqlType has "broken" being able to just use the User model directly in
+    // the build method of Queryable. Previously it worked when this was:
+    // type RowSqlType = (AsSelect<PostRecord, Sqlite>, <User as Model>::RowSqlType);
+    // which User::RowSqlType would have had simimlar AsSelect<> for each record it was loading.
+    // Is this because we can't use as_select() in the auto_type?
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = post_select_clause;
+    type FromClause = post_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        post::table
-            .inner_join(user::table.inner_join(lowboy_user::table))
-            .select((
-                PostRecord::as_select(),
-                UserRecord::as_select(),
-                LowboyUserRecord::as_select(),
-            ))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        post_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        post_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
-        Self::query()
-            .filter(post::id.eq(id))
-            .first::<Post>(conn)
-            .await
+        Self::query().filter(post::id.eq(id)).first(conn).await
+    }
+}
+
+impl Selectable<Sqlite> for Post {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, UserRecord, LowboyUserRecord);
+    type Row = (
+        PostRecord,
+        <User as Queryable<<User as Model>::RowSqlType, Sqlite>>::Row,
+    );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user_record, lowboy_user_record) = row;
-        let user = User::build((
-            user_record,
-            (
-                lowboy_user_record,
-                // Post does not need to know about these user details, so we can just use defaults.
-                // @TODO probably going to change this up later anyway.
-                Default::default(),
-                Default::default(),
-                Default::default(),
-            ),
-        ))?;
+        let (post_record, row) = row;
 
         Ok(Self {
             id: post_record.id,
-            user,
+            user: User::build(row)?,
             content: post_record.content,
         })
     }
@@ -116,7 +131,7 @@ impl From<Post> for PostRecord {
         Self {
             id: value.id,
             content: value.content,
-            user_id: value.user.id,
+            user_id: value.user.id(),
         }
     }
 }
@@ -165,7 +180,7 @@ impl<'a> UpdatePostRecord<'a> {
     pub fn from_post(post: &'a Post) -> Self {
         Self {
             id: post.id,
-            user_id: Some(post.user.id),
+            user_id: Some(post.user.id()),
             content: Some(&post.content),
         }
     }

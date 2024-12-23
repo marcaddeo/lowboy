@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS permission (
 
 -- Create user_role table.
 CREATE TABLE IF NOT EXISTS user_role (
-    user_id INTEGER NOT NULL REFERENCES lowboy_user(id),
+    user_id INTEGER NOT NULL REFERENCES user(id),
     role_id INTEGER NOT NULL REFERENCES role(id),
     PRIMARY KEY (user_id, role_id)
 );
