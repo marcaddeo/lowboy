@@ -2,11 +2,8 @@ use std::collections::HashSet;
 
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
-use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Nullable, Select, SqlTypeOf};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
-use diesel::result::Error::{DeserializationError, NotFound};
-use diesel::result::UnexpectedNullError;
-use diesel::sql_types::{Integer, Text};
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
@@ -16,29 +13,10 @@ use gravatar_api::avatars as gravatars;
 use crate::schema::{email, permission, role, role_permission, user, user_role};
 use crate::Connection;
 
-use super::{Email, EmailRecord, Model, Permission, Role, UnverifiedEmail};
-
-// @note: don't really love this solution, but GROUP BY with diesel doesn't seem to be able to work
-// across crates so that's problematic.
-pub trait AssumeNullIsNotFoundExtension<T> {
-    fn assume_null_is_not_found(self) -> QueryResult<T>;
-}
-
-impl<T> AssumeNullIsNotFoundExtension<T> for QueryResult<T> {
-    fn assume_null_is_not_found(self) -> QueryResult<T> {
-        match self {
-            Ok(value) => Ok(value),
-            Err(DeserializationError(e)) if e.is::<UnexpectedNullError>() => {
-                tracing::debug!(
-                    "assuming null is not found for {type_name}: {e}",
-                    type_name = std::any::type_name::<T>()
-                );
-                Err(NotFound)
-            }
-            Err(e) => Err(e),
-        }
-    }
-}
+use super::{
+    json_group_array, permission_record_json, role_record_json, AssumeNullIsNotFoundExtension,
+    Email, EmailRecord, Model, Permission, Role, UnverifiedEmail,
+};
 
 #[derive(Clone, Debug)]
 pub struct User {
@@ -170,76 +148,46 @@ impl UserModel for User {
     }
 }
 
-define_sql_function! {
-    fn group_concat(val: Text, separator: Text) -> Text;
+#[diesel::dsl::auto_type]
+pub fn user_from_clause() -> _ {
+    user::table.inner_join(email::table).inner_join(
+        user_role::table
+            .inner_join(role::table.left_join(role_permission::table.left_join(permission::table))),
+    )
 }
 
-define_sql_function! {
-    fn json_group_array(val: Text) -> Text;
-}
-
-// @TODO i believe Diesel will be adding general support for json_object eventually, so this should
-// be a temporary solution
-define_sql_function! {
-    #[sql_name = "json_object"]
-    fn role_record_json(a: Text, b: Integer, c: Text, d: Text) -> Text;
-}
-
-define_sql_function! {
-    #[sql_name = "json_object"]
-    fn permission_record_json(a: Text, b: diesel::sql_types::Nullable<Integer>, c: Text, d: diesel::sql_types::Nullable<Text>) -> Text;
+#[diesel::dsl::auto_type]
+pub fn user_select_clause() -> _ {
+    (
+        (user::id, user::username, user::password, user::access_token),
+        (email::id, email::user_id, email::address, email::verified),
+        json_group_array(role_record_json("id", role::id, "name", role::name)),
+        json_group_array(permission_record_json(
+            "id",
+            permission::id.nullable(),
+            "name",
+            permission::name.nullable(),
+        )),
+    )
 }
 
 #[async_trait::async_trait]
 impl Model for User {
-    type RowSqlType = (
-        AsSelect<UserRecord, Sqlite>,
-        AsSelect<EmailRecord, Sqlite>,
-        SqlTypeOf<
-            json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
-        >,
-        SqlTypeOf<
-            json_group_array<
-                permission_record_json<
-                    &'static str,
-                    Nullable<permission::id>,
-                    &'static str,
-                    Nullable<permission::name>,
-                >,
-            >,
-        >,
-    );
-    type Selection = (
-        AsSelect<UserRecord, Sqlite>,
-        AsSelect<EmailRecord, Sqlite>,
-        json_group_array<role_record_json<&'static str, role::id, &'static str, role::name>>,
-        json_group_array<
-            permission_record_json<
-                &'static str,
-                Nullable<permission::id>,
-                &'static str,
-                Nullable<permission::name>,
-            >,
-        >,
-    );
-    type Query = Select<
-        InnerJoin<
-            InnerJoin<user::table, email::table>,
-            InnerJoin<
-                user_role::table,
-                LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
-            >,
-        >,
-        Self::Selection,
-    >;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = user_select_clause;
+    type FromClause = user_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        user::table
-            .inner_join(email::table)
-            .inner_join(user_role::table.inner_join(
-                role::table.left_join(role_permission::table.left_join(permission::table)),
-            ))
-            .select(Self::construct_selection())
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        user_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        user_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -248,20 +196,10 @@ impl Model for User {
 }
 
 impl Selectable<Sqlite> for User {
-    type SelectExpression = <Self as Model>::Selection;
+    type SelectExpression = <Self as Model>::SelectClause;
 
     fn construct_selection() -> Self::SelectExpression {
-        (
-            UserRecord::as_select(),
-            EmailRecord::as_select(),
-            json_group_array(role_record_json("id", role::id, "name", role::name)),
-            json_group_array(permission_record_json(
-                "id",
-                permission::id.nullable(),
-                "name",
-                permission::name.nullable(),
-            )),
-        )
+        Self::select_clause()
     }
 }
 

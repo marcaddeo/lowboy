@@ -1,8 +1,8 @@
 use chrono::{Duration, Utc};
-use diesel::dsl::{AsSelect, Eq, Filter, InnerJoin, On, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
-use diesel::{OptionalExtension, QueryResult};
+use diesel::QueryResult;
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use uuid::Uuid;
@@ -117,23 +117,39 @@ impl UnverifiedEmail {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn unverified_email_from_clause() -> _ {
+    email::table
+        .inner_join(token::table.on(token::user_id.eq(email::user_id)))
+        .filter(email::verified.eq(false))
+}
+
+#[diesel::dsl::auto_type]
+fn unverified_email_select_clause() -> _ {
+    (
+        (email::id, email::user_id, email::address, email::verified),
+        (token::id, token::user_id, token::secret, token::expiration),
+    )
+}
+
 #[async_trait::async_trait]
 impl Model for UnverifiedEmail {
-    type RowSqlType = Self::Selection;
-    type Selection = (AsSelect<EmailRecord, Sqlite>, AsSelect<TokenRecord, Sqlite>);
-    type Query = Select<
-        Filter<
-            InnerJoin<email::table, On<token::table, Eq<token::user_id, email::user_id>>>,
-            Eq<email::verified, bool>,
-        >,
-        Self::Selection,
-    >;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = unverified_email_select_clause;
+    type FromClause = unverified_email_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
+    // @TODO we never check token expiration
     fn query() -> Self::Query {
-        Email::query()
-            .inner_join(token::table.on(token::user_id.eq(email::user_id)))
-            .filter(email::verified.eq(false))
-            .select((EmailRecord::as_select(), TokenRecord::as_select()))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        unverified_email_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        unverified_email_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -142,6 +158,14 @@ impl Model for UnverifiedEmail {
             .filter(email::verified.eq(false))
             .first(conn)
             .await
+    }
+}
+
+impl Selectable<Sqlite> for UnverifiedEmail {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 

@@ -1,13 +1,14 @@
-use diesel::dsl::{AsSelect, InnerJoin, LeftJoin, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
 use lowboy::model::{Model, UserModel, UserRecord};
-use lowboy::schema::{email, permission, role, role_permission, user_role};
 use lowboy::Connection;
 
 use crate::model::User;
-use crate::schema::{post, user, user_profile};
+use crate::schema::post;
+
+use super::{user_from_clause, user_select_clause};
 
 #[derive(Clone, Debug)]
 pub struct Post {
@@ -26,35 +27,41 @@ impl Post {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn post_from_clause() -> _ {
+    post::table.inner_join(user_from_clause())
+}
+
+#[diesel::dsl::auto_type]
+fn post_select_clause() -> _ {
+    (
+        (post::id, post::user_id, post::content),
+        user_select_clause(),
+    )
+}
+
 #[async_trait::async_trait]
 impl Model for Post {
-    type RowSqlType = (AsSelect<PostRecord, Sqlite>, <User as Model>::RowSqlType);
-    type Selection = (AsSelect<PostRecord, Sqlite>, <User as Model>::Selection);
-    type Query = Select<
-        InnerJoin<
-            InnerJoin<post::table, user_profile::table>,
-            InnerJoin<
-                InnerJoin<user::table, email::table>,
-                InnerJoin<
-                    user_role::table,
-                    LeftJoin<role::table, LeftJoin<role_permission::table, permission::table>>,
-                >,
-            >,
-        >,
-        Self::Selection,
-    >;
+    // @note changing this RowSqlType has "broken" being able to just use the User model directly in
+    // the build method of Queryable. Previously it worked when this was:
+    // type RowSqlType = (AsSelect<PostRecord, Sqlite>, <User as Model>::RowSqlType);
+    // which User::RowSqlType would have had simimlar AsSelect<> for each record it was loading.
+    // Is this because we can't use as_select() in the auto_type?
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = post_select_clause;
+    type FromClause = post_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        post::table
-            // .with_user()
-            .inner_join(user_profile::table)
-            .inner_join(user::table.inner_join(email::table).inner_join(
-                user_role::table.inner_join(
-                    role::table.left_join(role_permission::table.left_join(permission::table)),
-                ),
-            ))
-            // end
-            .select((PostRecord::as_select(), User::construct_selection()))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        post_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        post_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -62,15 +69,26 @@ impl Model for Post {
     }
 }
 
+impl Selectable<Sqlite> for Post {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
+    }
+}
+
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (PostRecord, User);
+    type Row = (
+        PostRecord,
+        <User as Queryable<<User as Model>::RowSqlType, Sqlite>>::Row,
+    );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, user) = row;
+        let (post_record, row) = row;
 
         Ok(Self {
             id: post_record.id,
-            user,
+            user: User::build(row)?,
             content: post_record.content,
         })
     }

@@ -1,4 +1,4 @@
-use diesel::dsl::{AsSelect, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -25,14 +25,33 @@ impl Permission {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn permission_from_clause() -> _ {
+    permission::table
+}
+
+#[diesel::dsl::auto_type]
+fn permission_select_clause() -> _ {
+    ((permission::id, permission::name),)
+}
+
 #[async_trait::async_trait]
 impl Model for Permission {
-    type RowSqlType = Self::Selection;
-    type Selection = (AsSelect<PermissionRecord, Sqlite>,);
-    type Query = Select<permission::table, Self::Selection>;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = permission_select_clause;
+    type FromClause = permission_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        permission::table.select((PermissionRecord::as_select(),))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        permission_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        permission_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -40,6 +59,14 @@ impl Model for Permission {
             .filter(permission::id.eq(id))
             .first(conn)
             .await
+    }
+}
+
+impl Selectable<Sqlite> for Permission {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 

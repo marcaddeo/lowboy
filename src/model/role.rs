@@ -1,4 +1,4 @@
-use diesel::dsl::{AsSelect, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -50,18 +50,44 @@ impl Role {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn role_from_clause() -> _ {
+    role::table
+}
+
+#[diesel::dsl::auto_type]
+fn role_select_clause() -> _ {
+    ((role::id, role::name),)
+}
+
 #[async_trait::async_trait]
 impl Model for Role {
-    type RowSqlType = Self::Selection;
-    type Selection = (AsSelect<RoleRecord, Sqlite>,);
-    type Query = Select<role::table, Self::Selection>;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = role_select_clause;
+    type FromClause = role_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        role::table.select((RoleRecord::as_select(),))
+        Self::from_clause().select(Self::select_clause())
     }
 
+    fn from_clause() -> Self::FromClause {
+        role_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        role_select_clause()
+    }
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
         Self::query().filter(role::id.eq(id)).first(conn).await
+    }
+}
+
+impl Selectable<Sqlite> for Role {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 

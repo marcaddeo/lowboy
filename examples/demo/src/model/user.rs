@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use diesel::dsl::{AsSelect, InnerJoin, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
@@ -8,10 +8,9 @@ use lowboy::model::{
     AssumeNullIsNotFoundExtension as _, Email, Model, Permission, Role, User as LowboyUser,
     UserModel,
 };
-use lowboy::schema::user;
 use lowboy::Connection;
 
-use crate::schema::user_profile;
+use crate::schema::{user, user_profile};
 
 use super::UserProfileRecord;
 
@@ -41,23 +40,42 @@ impl DemoUser for User {
     }
 }
 
+#[diesel::dsl::auto_type]
+pub fn user_from_clause() -> _ {
+    lowboy::model::user::user_from_clause().inner_join(user_profile::table)
+}
+
+#[diesel::dsl::auto_type]
+pub fn user_select_clause() -> _ {
+    (
+        (
+            user_profile::id,
+            user_profile::user_id,
+            user_profile::name,
+            user_profile::byline,
+            user_profile::avatar,
+        ),
+        lowboy::model::user::user_select_clause(),
+    )
+}
+
 #[async_trait::async_trait]
 impl Model for User {
-    type RowSqlType = (
-        AsSelect<UserProfileRecord, Sqlite>,
-        <LowboyUser as Model>::RowSqlType,
-    );
-    type Selection = (
-        AsSelect<UserProfileRecord, Sqlite>,
-        <LowboyUser as Model>::Selection,
-    );
-    type Query =
-        Select<InnerJoin<<LowboyUser as Model>::Query, user_profile::table>, Self::Selection>;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = user_select_clause;
+    type FromClause = user_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        LowboyUser::query()
-            .inner_join(user_profile::table)
-            .select(Self::construct_selection())
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        user_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        user_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
@@ -66,24 +84,24 @@ impl Model for User {
 }
 
 impl Selectable<Sqlite> for User {
-    type SelectExpression = <Self as Model>::Selection;
+    type SelectExpression = <Self as Model>::SelectClause;
 
     fn construct_selection() -> Self::SelectExpression {
-        (
-            UserProfileRecord::as_select(),
-            LowboyUser::construct_selection(),
-        )
+        Self::select_clause()
     }
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (UserProfileRecord, LowboyUser);
+    type Row = (
+        UserProfileRecord,
+        <LowboyUser as Queryable<<LowboyUser as Model>::RowSqlType, Sqlite>>::Row,
+    );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (profile_record, user) = row;
+        let (profile_record, row) = row;
 
         Ok(Self {
-            user,
+            user: LowboyUser::build(row)?,
             profile: profile_record,
         })
     }

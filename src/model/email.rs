@@ -1,5 +1,5 @@
 use derive_more::derive::Display;
-use diesel::dsl::{AsSelect, Select};
+use diesel::dsl::{Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -54,18 +54,45 @@ impl Email {
     }
 }
 
+#[diesel::dsl::auto_type]
+fn email_from_clause() -> _ {
+    email::table
+}
+
+#[diesel::dsl::auto_type]
+fn email_select_clause() -> _ {
+    ((email::id, email::user_id, email::address, email::verified),)
+}
+
 #[async_trait::async_trait]
 impl Model for Email {
-    type RowSqlType = Self::Selection;
-    type Selection = (AsSelect<EmailRecord, Sqlite>,);
-    type Query = Select<email::table, Self::Selection>;
+    type RowSqlType = SqlTypeOf<Self::SelectClause>;
+    type SelectClause = email_select_clause;
+    type FromClause = email_from_clause;
+    type Query = Select<Self::FromClause, Self::SelectClause>;
 
     fn query() -> Self::Query {
-        email::table.select((EmailRecord::as_select(),))
+        Self::from_clause().select(Self::select_clause())
+    }
+
+    fn from_clause() -> Self::FromClause {
+        email_from_clause()
+    }
+
+    fn select_clause() -> Self::SelectClause {
+        email_select_clause()
     }
 
     async fn load(id: i32, conn: &mut Connection) -> QueryResult<Self> {
         Self::query().filter(email::id.eq(id)).first(conn).await
+    }
+}
+
+impl Selectable<Sqlite> for Email {
+    type SelectExpression = <Self as Model>::SelectClause;
+
+    fn construct_selection() -> Self::SelectExpression {
+        Self::select_clause()
     }
 }
 
