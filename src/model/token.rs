@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use constant_time_eq::constant_time_eq;
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
@@ -30,7 +30,8 @@ fn token_from_clause() -> _ {
 
 #[diesel::dsl::auto_type]
 fn token_select_clause() -> _ {
-    ((token::id, token::user_id, token::secret, token::expiration),)
+    let as_select: AsSelect<TokenRecord, Sqlite> = TokenRecord::as_select();
+    (as_select,)
 }
 
 #[async_trait::async_trait]

@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use axum_login::AuthUser;
 use derive_masked::DebugMasked;
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -158,9 +158,14 @@ pub fn user_from_clause() -> _ {
 
 #[diesel::dsl::auto_type]
 pub fn user_select_clause() -> _ {
+    let user_as_select: AsSelect<UserRecord, Sqlite> = UserRecord::as_select();
+    // @TODO this doesn't work here for some reason, but does in UnverifiedEmail/Post/DemoUser?
+    // let email_as_select: <Email as Model>::SelectClause = <Email as Model>::select_clause();
+    let email_as_select: AsSelect<EmailRecord, Sqlite> = EmailRecord::as_select();
+
     (
-        (user::id, user::username, user::password, user::access_token),
-        (email::id, email::user_id, email::address, email::verified),
+        user_as_select,
+        email_as_select,
         json_group_array(role_record_json("id", role::id, "name", role::name)),
         json_group_array(permission_record_json(
             "id",
@@ -209,12 +214,12 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
     type Row = (UserRecord, EmailRecord, String, String);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, email_record, roles, permissions) = row;
+        let (user_record, email, roles, permissions) = row;
 
         Ok(Self {
             id: user_record.id,
             username: user_record.username,
-            email: email_record.into(),
+            email: email.into(),
             password: user_record.password,
             access_token: user_record.access_token,
             roles: serde_json::from_str(&roles).unwrap_or_default(),

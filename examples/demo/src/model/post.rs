@@ -1,4 +1,4 @@
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
@@ -8,8 +8,6 @@ use lowboy::Connection;
 
 use crate::model::User;
 use crate::schema::post;
-
-use super::{user_from_clause, user_select_clause};
 
 #[derive(Clone, Debug)]
 pub struct Post {
@@ -50,24 +48,21 @@ impl Post {
 
 #[diesel::dsl::auto_type]
 fn post_from_clause() -> _ {
-    post::table.inner_join(user_from_clause())
+    let user_from_clause: <User as Model>::FromClause = <User as Model>::from_clause();
+
+    post::table.inner_join(user_from_clause)
 }
 
 #[diesel::dsl::auto_type]
 fn post_select_clause() -> _ {
-    (
-        (post::id, post::user_id, post::content),
-        user_select_clause(),
-    )
+    let post_as_select: AsSelect<PostRecord, Sqlite> = PostRecord::as_select();
+    let user_as_select: <User as Model>::SelectClause = <User as Model>::select_clause();
+
+    (post_as_select, user_as_select)
 }
 
 #[async_trait::async_trait]
 impl Model for Post {
-    // @note changing this RowSqlType has "broken" being able to just use the User model directly in
-    // the build method of Queryable. Previously it worked when this was:
-    // type RowSqlType = (AsSelect<PostRecord, Sqlite>, <User as Model>::RowSqlType);
-    // which User::RowSqlType would have had simimlar AsSelect<> for each record it was loading.
-    // Is this because we can't use as_select() in the auto_type?
     type RowSqlType = SqlTypeOf<Self::SelectClause>;
     type SelectClause = post_select_clause;
     type FromClause = post_from_clause;
@@ -99,17 +94,14 @@ impl Selectable<Sqlite> for Post {
 }
 
 impl Queryable<<Post as Model>::RowSqlType, Sqlite> for Post {
-    type Row = (
-        PostRecord,
-        <User as Queryable<<User as Model>::RowSqlType, Sqlite>>::Row,
-    );
+    type Row = (PostRecord, User);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (post_record, row) = row;
+        let (post_record, user) = row;
 
         Ok(Self {
             id: post_record.id,
-            user: User::build(row)?,
+            user,
             content: post_record.content,
         })
     }

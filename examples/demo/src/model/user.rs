@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
@@ -42,21 +42,18 @@ impl DemoUser for User {
 
 #[diesel::dsl::auto_type]
 pub fn user_from_clause() -> _ {
-    lowboy::model::user::user_from_clause().inner_join(user_profile::table)
+    let user_from_clause: <LowboyUser as Model>::FromClause = <LowboyUser as Model>::from_clause();
+
+    user_from_clause.inner_join(user_profile::table)
 }
 
 #[diesel::dsl::auto_type]
 pub fn user_select_clause() -> _ {
-    (
-        (
-            user_profile::id,
-            user_profile::user_id,
-            user_profile::name,
-            user_profile::byline,
-            user_profile::avatar,
-        ),
-        lowboy::model::user::user_select_clause(),
-    )
+    let user_profile_select: AsSelect<UserProfileRecord, Sqlite> = UserProfileRecord::as_select();
+    let user_as_select: <LowboyUser as Model>::SelectClause =
+        <LowboyUser as Model>::select_clause();
+
+    (user_profile_select, user_as_select)
 }
 
 #[async_trait::async_trait]
@@ -92,16 +89,13 @@ impl Selectable<Sqlite> for User {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    type Row = (
-        UserProfileRecord,
-        <LowboyUser as Queryable<<LowboyUser as Model>::RowSqlType, Sqlite>>::Row,
-    );
+    type Row = (UserProfileRecord, LowboyUser);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (profile_record, row) = row;
+        let (profile_record, user) = row;
 
         Ok(Self {
-            user: LowboyUser::build(row)?,
+            user,
             profile: profile_record,
         })
     }

@@ -1,4 +1,4 @@
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -32,7 +32,8 @@ fn permission_from_clause() -> _ {
 
 #[diesel::dsl::auto_type]
 fn permission_select_clause() -> _ {
-    ((permission::id, permission::name),)
+    let as_select: AsSelect<PermissionRecord, Sqlite> = PermissionRecord::as_select();
+    (as_select,)
 }
 
 #[async_trait::async_trait]

@@ -1,4 +1,4 @@
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -57,7 +57,9 @@ fn role_from_clause() -> _ {
 
 #[diesel::dsl::auto_type]
 fn role_select_clause() -> _ {
-    ((role::id, role::name),)
+    let as_select: AsSelect<RoleRecord, Sqlite> = RoleRecord::as_select();
+
+    (as_select,)
 }
 
 #[async_trait::async_trait]

@@ -1,5 +1,5 @@
 use chrono::{Duration, Utc};
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::QueryResult;
@@ -126,10 +126,10 @@ fn unverified_email_from_clause() -> _ {
 
 #[diesel::dsl::auto_type]
 fn unverified_email_select_clause() -> _ {
-    (
-        (email::id, email::user_id, email::address, email::verified),
-        (token::id, token::user_id, token::secret, token::expiration),
-    )
+    let email_as_select: AsSelect<EmailRecord, Sqlite> = EmailRecord::as_select();
+    let token_as_select: <Token as Model>::SelectClause = <Token as Model>::select_clause();
+
+    (email_as_select, token_as_select)
 }
 
 #[async_trait::async_trait]
@@ -170,16 +170,16 @@ impl Selectable<Sqlite> for UnverifiedEmail {
 }
 
 impl Queryable<<UnverifiedEmail as Model>::RowSqlType, Sqlite> for UnverifiedEmail {
-    type Row = (EmailRecord, TokenRecord);
+    type Row = (EmailRecord, Token);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (email_record, token_record) = row;
+        let (email_record, token) = row;
 
         Ok(Self {
             id: email_record.id,
             user_id: email_record.user_id,
             address: email_record.address,
-            token: token_record.into(),
+            token,
         })
     }
 }

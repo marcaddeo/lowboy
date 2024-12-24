@@ -1,5 +1,5 @@
 use derive_more::derive::Display;
-use diesel::dsl::{Select, SqlTypeOf};
+use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel::{OptionalExtension, QueryResult, Selectable};
@@ -60,8 +60,10 @@ fn email_from_clause() -> _ {
 }
 
 #[diesel::dsl::auto_type]
-fn email_select_clause() -> _ {
-    ((email::id, email::user_id, email::address, email::verified),)
+pub fn email_select_clause() -> _ {
+    let as_select: AsSelect<EmailRecord, Sqlite> = EmailRecord::as_select();
+
+    (as_select,)
 }
 
 #[async_trait::async_trait]
