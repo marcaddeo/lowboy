@@ -2,6 +2,7 @@ use axum::response::IntoResponse;
 use lowboy::error::LowboyError;
 use lowboy::extract::{DatabaseConnection, EnsureAppUser};
 use lowboy::lowboy_view;
+use lowboy::model::{HasRole, UserModel};
 
 use crate::app::{Demo, DemoContext};
 use crate::model::Post;
@@ -14,7 +15,12 @@ pub async fn home(
 ) -> Result<impl IntoResponse, LowboyError> {
     let posts = Post::list(&mut conn, Some(5)).await?;
 
-    Ok(lowboy_view!(Home { user, posts }, {
+    let template = Home {
+        show_post_form: user.roles(&mut conn).await?.has_role("authenticated"),
+        posts,
+    };
+
+    Ok(lowboy_view!(template, {
         "title" => "Home",
     }))
 }

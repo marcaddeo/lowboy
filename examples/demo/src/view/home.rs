@@ -1,11 +1,11 @@
-use lowboy::model::UserModel as _;
 use rinja::Template;
 
-use crate::model::{self, DemoUser, User};
+use crate::model::DemoUser;
+use crate::model::Post;
 
 #[derive(Clone, Template)]
 #[template(path = "pages/home.html")]
 pub struct Home {
-    pub user: User,
-    pub posts: Vec<model::Post>,
+    pub show_post_form: bool,
+    pub posts: Vec<Post>,
 }

@@ -485,6 +485,7 @@ impl AuthzBackend for LowboyAuth {
         &self,
         user: &Self::User,
     ) -> std::result::Result<HashSet<Self::Permission>, Self::Error> {
-        Ok(user.permissions().clone())
+        let mut conn = self.context.database().get().await?;
+        Ok(user.permissions(&mut conn).await?.clone())
     }
 }

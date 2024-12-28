@@ -13,10 +13,22 @@ use gravatar_api::avatars as gravatars;
 use crate::schema::{email, permission, role, role_permission, user, user_role};
 use crate::Connection;
 
-use super::{
-    json_group_array, permission_record_json, role_record_json, AssumeNullIsNotFoundExtension,
-    Email, EmailRecord, Model, Permission, Role, UnverifiedEmail,
-};
+use super::{Email, Model, Permission, PermissionRecord, Role, RoleRecord, UnverifiedEmail};
+
+pub trait HasPermission: Sized + IntoIterator<Item = Permission> {
+    fn has_permission(self, permission: &str) -> bool {
+        self.into_iter().any(|p| p.name == permission)
+    }
+}
+
+pub trait HasRole: Sized + IntoIterator<Item = Role> {
+    fn has_role(self, role: &str) -> bool {
+        self.into_iter().any(|p| p.name == role)
+    }
+}
+
+impl HasRole for HashSet<Role> {}
+impl HasPermission for HashSet<Permission> {}
 
 #[derive(Clone, Debug)]
 pub struct User {
@@ -71,20 +83,20 @@ impl User {
             .filter(user::password.is_not_null())
             .first(conn)
             .await
-            .assume_null_is_not_found()
             .optional()
     }
 }
 
 #[async_trait::async_trait]
-pub trait UserModel: Model {
+pub trait UserModel: Model
+where
+    Self: Sized,
+{
     fn id(&self) -> i32;
     fn username(&self) -> &String;
     fn email(&self) -> &Email;
     fn password(&self) -> Option<&String>;
     fn access_token(&self) -> Option<&String>;
-    fn roles(&self) -> &HashSet<Role>;
-    fn permissions(&self) -> &HashSet<Permission>;
     fn gravatar(&self) -> String {
         gravatars::Avatar::builder(&self.email().address)
             .size(256)
@@ -95,17 +107,10 @@ pub trait UserModel: Model {
             .to_string()
     }
 
-    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
-    where
-        Self: Sized;
+    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>>;
+    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>>;
 
-    fn is_authenticated(&self) -> bool {
-        self.roles().iter().any(|r| r.name == "authenticated")
-    }
-
-    fn has_permission(&self, permission: &str) -> bool {
-        self.permissions().iter().any(|p| p.name == permission)
-    }
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>;
 }
 
 #[async_trait::async_trait]
@@ -130,12 +135,30 @@ impl UserModel for User {
         self.access_token.as_ref()
     }
 
-    fn roles(&self) -> &HashSet<Role> {
-        &self.roles
+    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>> {
+        let roles = role::table
+            .inner_join(user_role::table)
+            .filter(user_role::user_id.eq(self.id))
+            .select(RoleRecord::as_select())
+            .load(conn)
+            .await?
+            .into_iter()
+            .map(Role::from);
+
+        Ok(HashSet::from_iter(roles))
     }
 
-    fn permissions(&self) -> &HashSet<Permission> {
-        &self.permissions
+    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>> {
+        let permissions = permission::table
+            .inner_join(role_permission::table.inner_join(role::table.inner_join(user_role::table)))
+            .filter(user_role::user_id.eq(self.id))
+            .select(PermissionRecord::as_select())
+            .load(conn)
+            .await?
+            .into_iter()
+            .map(Permission::from);
+
+        Ok(HashSet::from_iter(permissions))
     }
 
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
@@ -143,37 +166,21 @@ impl UserModel for User {
             .filter(user::username.eq(username))
             .first::<Self>(conn)
             .await
-            .assume_null_is_not_found()
             .optional()
     }
 }
 
 #[diesel::dsl::auto_type]
 pub fn user_from_clause() -> _ {
-    user::table.inner_join(email::table).inner_join(
-        user_role::table
-            .inner_join(role::table.left_join(role_permission::table.left_join(permission::table))),
-    )
+    user::table.inner_join(email::table)
 }
 
 #[diesel::dsl::auto_type]
 pub fn user_select_clause() -> _ {
     let user_as_select: AsSelect<UserRecord, Sqlite> = UserRecord::as_select();
-    // @TODO this doesn't work here for some reason, but does in UnverifiedEmail/Post/DemoUser?
-    // let email_as_select: <Email as Model>::SelectClause = <Email as Model>::select_clause();
-    let email_as_select: AsSelect<EmailRecord, Sqlite> = EmailRecord::as_select();
+    let email_as_select: <Email as Model>::SelectClause = <Email as Model>::select_clause();
 
-    (
-        user_as_select,
-        email_as_select,
-        json_group_array(role_record_json("id", role::id, "name", role::name)),
-        json_group_array(permission_record_json(
-            "id",
-            permission::id.nullable(),
-            "name",
-            permission::name.nullable(),
-        )),
-    )
+    (user_as_select, email_as_select)
 }
 
 #[async_trait::async_trait]
@@ -209,21 +216,19 @@ impl Selectable<Sqlite> for User {
 }
 
 impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
-    // @TODO EmailRecord -> Email
-    // String/String -> Role/Permission?
-    type Row = (UserRecord, EmailRecord, String, String);
+    type Row = (UserRecord, Email);
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        let (user_record, email, roles, permissions) = row;
+        let (user_record, email) = row;
 
         Ok(Self {
             id: user_record.id,
             username: user_record.username,
-            email: email.into(),
+            email,
             password: user_record.password,
             access_token: user_record.access_token,
-            roles: serde_json::from_str(&roles).unwrap_or_default(),
-            permissions: serde_json::from_str(&permissions).unwrap_or_default(),
+            roles: HashSet::new(), // @TODO
+            permissions: HashSet::new(),
         })
     }
 }

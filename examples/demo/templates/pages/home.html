@@ -1,8 +1,8 @@
-{% if user.is_authenticated() %}
-  <section class="grid justify-items-center py-10">
-    {% include "components/post-form.html" %}
-  </section>
+<section class="grid justify-items-center py-10">
+{% if show_post_form %}
+  {% include "components/post-form.html" %}
 {% endif %}
+</section>
 <section id="posts" hx-swap="afterbegin" hx-ext="sse" sse-connect="/events" sse-swap="NewPost" class="grid justify-items-center">
   {% for post in posts %}
     {% include "components/post.html" %}

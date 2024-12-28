@@ -4,10 +4,7 @@ use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::{
-    AssumeNullIsNotFoundExtension as _, Email, Model, Permission, Role, User as LowboyUser,
-    UserModel,
-};
+use lowboy::model::{Email, Model, Permission, Role, User as LowboyUser, UserModel};
 use lowboy::Connection;
 
 use crate::schema::{user, user_profile};
@@ -123,12 +120,12 @@ impl UserModel for User {
         self.user.access_token.as_ref()
     }
 
-    fn roles(&self) -> &HashSet<Role> {
-        &self.user.roles
+    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>> {
+        self.user.roles(conn).await
     }
 
-    fn permissions(&self) -> &HashSet<Permission> {
-        &self.user.permissions
+    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>> {
+        self.user.permissions(conn).await
     }
 
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
@@ -139,7 +136,6 @@ impl UserModel for User {
             .filter(user::username.eq(username))
             .first(conn)
             .await
-            .assume_null_is_not_found()
             .optional()
     }
 }

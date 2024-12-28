@@ -2,7 +2,6 @@ use diesel::dsl::{AsSelect, Select, SqlTypeOf};
 use diesel::prelude::*;
 use diesel::sqlite::Sqlite;
 use diesel_async::RunQueryDsl;
-use lowboy::model::AssumeNullIsNotFoundExtension as _;
 use lowboy::model::{Model, UserModel, UserRecord};
 use lowboy::Connection;
 
@@ -33,16 +32,11 @@ impl Post {
         // ideal... so if we go that route we're also going to need to figure out some sort of
         // caching solution for models now, and ensuring that cache can be invalidated e.g. when a
         // new role is added to a user or a new permission is added to a role.
-        let posts = Post::query()
+        Post::query()
             .limit(limit.unwrap_or(100))
             .order_by(post::id.desc())
             .load(conn)
             .await
-            .assume_null_is_not_found()
-            .optional()?
-            .unwrap_or_default();
-
-        Ok(posts)
     }
 }
 
