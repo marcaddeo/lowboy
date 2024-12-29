@@ -9,26 +9,13 @@ use diesel::{OptionalExtension, QueryResult, Selectable};
 use diesel_async::scoped_futures::ScopedFutureExt;
 use diesel_async::{AsyncConnection, RunQueryDsl};
 use gravatar_api::avatars as gravatars;
+use tracing::info;
 
+use crate::model::{json_group_array, permission_record_json, role_record_json};
 use crate::schema::{email, permission, role, role_permission, user, user_role};
 use crate::Connection;
 
-use super::{Email, Model, Permission, PermissionRecord, Role, RoleRecord, UnverifiedEmail};
-
-pub trait HasPermission: Sized + IntoIterator<Item = Permission> {
-    fn has_permission(self, permission: &str) -> bool {
-        self.into_iter().any(|p| p.name == permission)
-    }
-}
-
-pub trait HasRole: Sized + IntoIterator<Item = Role> {
-    fn has_role(self, role: &str) -> bool {
-        self.into_iter().any(|p| p.name == role)
-    }
-}
-
-impl HasRole for HashSet<Role> {}
-impl HasPermission for HashSet<Permission> {}
+use super::{Email, Model, Permission, Role, UnverifiedEmail};
 
 #[derive(Clone, Debug)]
 pub struct User {
@@ -37,8 +24,8 @@ pub struct User {
     pub email: Email,
     pub password: Option<String>,
     pub access_token: Option<String>,
-    pub roles: HashSet<Role>,
-    pub permissions: HashSet<Permission>,
+    pub roles: Option<HashSet<Role>>,
+    pub permissions: Option<HashSet<Permission>>,
 }
 
 impl User {
@@ -106,11 +93,67 @@ where
             .image_url()
             .to_string()
     }
-
-    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>>;
-    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>>;
+    fn roles(&self) -> Option<&HashSet<Role>>;
+    fn set_roles(&mut self, roles: HashSet<Role>) -> &mut Self;
+    fn permissions(&self) -> Option<&HashSet<Permission>>;
+    fn set_permissions(&mut self, permissions: HashSet<Permission>) -> &mut Self;
 
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>;
+
+    async fn with_roles_and_permissions(
+        &mut self,
+        conn: &mut Connection,
+    ) -> QueryResult<&mut Self> {
+        allow_columns_to_appear_in_same_group_by_clause!(
+            permission::id,
+            permission::name,
+            role::id,
+            role::name,
+        );
+
+        let (roles, permissions) = user_role::table
+            .inner_join(role::table.left_join(role_permission::table.left_join(permission::table)))
+            .filter(user_role::user_id.eq(self.id()))
+            .group_by((role::id, role::name, permission::id, permission::name))
+            .select((
+                json_group_array(role_record_json("id", role::id, "name", role::name)),
+                json_group_array(permission_record_json(
+                    "id",
+                    permission::id.nullable(),
+                    "name",
+                    permission::name.nullable(),
+                )),
+            ))
+            .first::<(String, String)>(conn)
+            .await?;
+
+        self.set_roles(serde_json::from_str(&roles).unwrap_or_default())
+            .set_permissions(serde_json::from_str(&permissions).unwrap_or_default());
+
+        Ok(self)
+    }
+
+    fn has_role(&self, role: &str) -> bool {
+        if self.roles().is_none() {
+            info!("attempted to check for role `{role}` on user `{user_id}` before calling UserModel::with_roles_and_permissions()", user_id = self.id());
+        }
+
+        self.roles()
+            .is_some_and(|roles| roles.iter().any(|user_role| user_role.name == role))
+    }
+
+    fn has_permission(&self, permission: &str) -> bool {
+        if self.permissions().is_none() {
+            info!("attempted to check for permission `{permission}` on user `{user_id}` before calling UserModel::with_permissions_and_permissions()", user_id = self.id());
+        }
+
+        self.permissions()
+            .is_some_and(|permissions| permissions.iter().any(|perm| perm.name == permission))
+    }
+
+    fn is_authenticated(&self) -> bool {
+        self.has_role("authenticated")
+    }
 }
 
 #[async_trait::async_trait]
@@ -135,30 +178,22 @@ impl UserModel for User {
         self.access_token.as_ref()
     }
 
-    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>> {
-        let roles = role::table
-            .inner_join(user_role::table)
-            .filter(user_role::user_id.eq(self.id))
-            .select(RoleRecord::as_select())
-            .load(conn)
-            .await?
-            .into_iter()
-            .map(Role::from);
-
-        Ok(HashSet::from_iter(roles))
+    fn roles(&self) -> Option<&HashSet<Role>> {
+        self.roles.as_ref()
     }
 
-    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>> {
-        let permissions = permission::table
-            .inner_join(role_permission::table.inner_join(role::table.inner_join(user_role::table)))
-            .filter(user_role::user_id.eq(self.id))
-            .select(PermissionRecord::as_select())
-            .load(conn)
-            .await?
-            .into_iter()
-            .map(Permission::from);
+    fn set_roles(&mut self, roles: HashSet<Role>) -> &mut Self {
+        self.roles = Some(roles);
+        self
+    }
 
-        Ok(HashSet::from_iter(permissions))
+    fn permissions(&self) -> Option<&HashSet<Permission>> {
+        self.permissions.as_ref()
+    }
+
+    fn set_permissions(&mut self, permissions: HashSet<Permission>) -> &mut Self {
+        self.permissions = Some(permissions);
+        self
     }
 
     async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
@@ -227,8 +262,8 @@ impl Queryable<<User as Model>::RowSqlType, Sqlite> for User {
             email,
             password: user_record.password,
             access_token: user_record.access_token,
-            roles: HashSet::new(), // @TODO
-            permissions: HashSet::new(),
+            roles: None,
+            permissions: None,
         })
     }
 }

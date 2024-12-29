@@ -12,7 +12,7 @@ use crate::view::LowboyLayout;
 
 #[allow(unused_variables)]
 pub trait App<AC: CloneableAppContext>: Send + 'static {
-    type User: UserModel;
+    type User: UserModel + Send + Clone;
     type Layout: LowboyLayout<Self::User>;
     type ErrorView: LowboyErrorView;
     type RegistrationForm: RegistrationForm

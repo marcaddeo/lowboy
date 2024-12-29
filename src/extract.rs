@@ -4,7 +4,7 @@ use diesel_async::pooled_connection::deadpool::{Object, Pool};
 
 use crate::context::CloneableAppContext;
 use crate::error::LowboyError;
-use crate::model::Model;
+use crate::model::{Model, UserModel};
 use crate::{app, AppContext, AuthSession, Connection};
 
 pub struct DatabaseConnection(pub Object<Connection>);
@@ -78,7 +78,11 @@ where
             return Ok(Self(None));
         };
         // @TODO is this necessary?
-        let user = <App::User as Model>::load(user.id, &mut conn).await?;
+        let user = <App::User as Model>::load(user.id, &mut conn)
+            .await?
+            .with_roles_and_permissions(&mut conn)
+            .await?
+            .to_owned();
 
         Ok(Self(Some(user)))
     }

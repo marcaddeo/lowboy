@@ -120,22 +120,29 @@ impl UserModel for User {
         self.user.access_token.as_ref()
     }
 
-    async fn roles(&self, conn: &mut Connection) -> QueryResult<HashSet<Role>> {
-        self.user.roles(conn).await
-    }
-
-    async fn permissions(&self, conn: &mut Connection) -> QueryResult<HashSet<Permission>> {
-        self.user.permissions(conn).await
-    }
-
-    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>>
-    where
-        Self: Sized,
-    {
+    async fn find_by_username(username: &str, conn: &mut Connection) -> QueryResult<Option<Self>> {
         Self::query()
             .filter(user::username.eq(username))
             .first(conn)
             .await
             .optional()
+    }
+
+    fn roles(&self) -> Option<&HashSet<Role>> {
+        self.user.roles.as_ref()
+    }
+
+    fn set_roles(&mut self, roles: HashSet<Role>) -> &mut Self {
+        self.user.roles = Some(roles);
+        self
+    }
+
+    fn permissions(&self) -> Option<&HashSet<Permission>> {
+        self.user.permissions.as_ref()
+    }
+
+    fn set_permissions(&mut self, permissions: HashSet<Permission>) -> &mut Self {
+        self.user.permissions = Some(permissions);
+        self
     }
 }

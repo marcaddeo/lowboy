@@ -2,7 +2,7 @@ use axum::extract::Form;
 use axum::response::IntoResponse;
 use lowboy::error::LowboyError;
 use lowboy::extract::{DatabaseConnection, EnsureAppUser};
-use lowboy::model::{HasRole as _, Model as _, UserModel};
+use lowboy::model::{Model as _, UserModel};
 use serde::Deserialize;
 
 use crate::app::{Demo, DemoContext};
@@ -19,7 +19,7 @@ pub async fn create(
     DatabaseConnection(mut conn): DatabaseConnection,
     Form(input): Form<PostCreateForm>,
 ) -> Result<impl IntoResponse, LowboyError> {
-    if !author.roles(&mut conn).await?.has_role("authenticated") {
+    if !author.is_authenticated() {
         return Err(LowboyError::Unauthorized);
     }
 

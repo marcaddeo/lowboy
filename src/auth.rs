@@ -473,7 +473,13 @@ impl AuthnBackend for LowboyAuth {
         user_id: &axum_login::UserId<Self>,
     ) -> std::result::Result<Option<Self::User>, Self::Error> {
         let mut conn = self.context.database().get().await?;
-        Ok(Some(User::load(*user_id, &mut conn).await?))
+        let user = User::load(*user_id, &mut conn)
+            .await?
+            .with_roles_and_permissions(&mut conn)
+            .await?
+            .to_owned();
+
+        Ok(Some(user))
     }
 }
 
@@ -485,7 +491,6 @@ impl AuthzBackend for LowboyAuth {
         &self,
         user: &Self::User,
     ) -> std::result::Result<HashSet<Self::Permission>, Self::Error> {
-        let mut conn = self.context.database().get().await?;
-        Ok(user.permissions(&mut conn).await?.clone())
+        Ok(user.permissions().cloned().unwrap_or_default())
     }
 }
